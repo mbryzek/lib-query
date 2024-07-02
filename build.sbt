@@ -6,7 +6,7 @@ ThisBuild / scalaVersion := "3.3.3"
 
 ThisBuild / javacOptions ++= Seq("-source", "17", "-target", "17")
 
-version := "0.0.13"
+version := "0.0.1"
 
 lazy val allScalacOptions = Seq(
   "-feature",
