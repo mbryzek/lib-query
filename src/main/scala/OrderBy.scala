@@ -39,7 +39,7 @@ object OrderBy {
     }
   }
 
-  private[this] def validateValidValues(
+  private def validateValidValues(
     sort: SortWithOrder,
     validValues: Option[Set[String]]
   ): ValidatedNec[String, Unit] = {
@@ -52,18 +52,18 @@ object OrderBy {
     }
   }
 
-  private[this] sealed trait SortOrder
-  private[this] object SortOrder {
+  private sealed trait SortOrder
+  private object SortOrder {
     case object Ascending extends SortOrder
     case object Descending extends SortOrder
   }
-  private[this] case class SortWithOrder(sort: String, order: SortOrder) {
+  private case class SortWithOrder(sort: String, order: SortOrder) {
     def sql: String = order match {
       case SortOrder.Ascending => sort
       case SortOrder.Descending => s"$sort desc"
     }
   }
-  private[this] def parseOrder(sort: String): Seq[SortWithOrder] = {
+  private def parseOrder(sort: String): Seq[SortWithOrder] = {
     sort.split(",").toSeq.map(_.trim.toLowerCase).filterNot(_.isEmpty).map { w =>
       w.take(1) match {
         case "-" => SortWithOrder(w.drop(1), SortOrder.Descending)

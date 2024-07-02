@@ -62,7 +62,7 @@ case class Query(
     }
   }
 
-  private[this] def maybeReportError(ex: Throwable): Unit = {
+  private def maybeReportError(ex: Throwable): Unit = {
     if (ex.getMessage.contains("syntax error")) {
       println(s"SQL Syntax Error. Query:\n${generateSql()}")
       ex.printStackTrace(System.err)
@@ -75,7 +75,7 @@ case class Query(
         case TypeUnit => NamedParameter(b.name, Option.empty[String])
         case _ => NamedParameter(b.name, b.param.value)
       }
-    }: _*)
+    } *)
   }
 
   def withDebugging: Query = {
@@ -97,7 +97,7 @@ case class Query(
     query
   }
 
-  private[this] def generateSql(): String = {
+  private def generateSql(): String = {
     Seq(
       Some(baseQuery),
       filters.toList match {
@@ -124,7 +124,7 @@ case class Query(
   }
 
   @tailrec
-  private[this] def operation(op: String, name: String, value: Any): Query = {
+  private def operation(op: String, name: String, value: Any): Query = {
     value match {
       case None => this
       case Some(v) => operation(op, name, v)
@@ -199,7 +199,7 @@ case class Query(
     buildIn("not in", "true", column, values)
   }
 
-  private[this] def buildIn(op: String, default: String, column: String, values: Seq[Any]): Query = {
+  private def buildIn(op: String, default: String, column: String, values: Seq[Any]): Query = {
     Sanitize.assertSafe(column)
     if (values.isEmpty) {
       // matches nothing
@@ -308,12 +308,12 @@ case class Query(
     internalBind(bindVarName(name), Parameter.from(value), 1)
   }
 
-  private[this] def bindVarName(name: String): String = {
+  private def bindVarName(name: String): String = {
     rewriteJson(stripCast(name))
   }
 
   // remove any user provided cast (e.g. "name::text" => name)
-  private[this] def stripCast(value: String): String = {
+  private def stripCast(value: String): String = {
     val i = value.indexOf("::")
     if (i > 0) {
       value.take(i)
@@ -322,7 +322,7 @@ case class Query(
     }
   }
 
-  private[this] def rewriteJson(value: String): String = {
+  private def rewriteJson(value: String): String = {
     val v = Seq("->>", "->", "'", "\\(", "\\)")
       .foldLeft(value) { case (v, pattern) =>
         v.replaceAll(pattern, "_")
@@ -337,7 +337,7 @@ case class Query(
   }
 
   @tailrec
-  private[this] def internalBind(name: String, param: Parameter[_], count: Int): (Query, BoundParameter) = {
+  private def internalBind(name: String, param: Parameter[?], count: Int): (Query, BoundParameter) = {
     val candidate = count match {
       case 1 => name
       case _ => s"${name}_$count"
@@ -361,7 +361,7 @@ case class Query(
     this.copy(filters = filters ++ newFilters)
   }
 
-  private[this] def bindInList(columns: Seq[String], values: Seq[Any]): Query = {
+  private def bindInList(columns: Seq[String], values: Seq[Any]): Query = {
     columns.foreach(Sanitize.assertSafe)
     val (q: Query, params: Seq[BoundParameter]) =
       columns.zip(values).foldLeft((this, List.empty[BoundParameter])) { case ((q, names), (n, v)) =>

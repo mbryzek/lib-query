@@ -14,7 +14,7 @@ sealed trait Parameter[T] {
   def cast: Option[String]
 }
 
-case class BoundParameter(name: String, param: Parameter[_]) {
+case class BoundParameter(name: String, param: Parameter[?]) {
   def bindFragment: String = {
     val cast = param.cast match {
       case None => ""
@@ -25,10 +25,10 @@ case class BoundParameter(name: String, param: Parameter[_]) {
 }
 
 object Parameter {
-  def from[T](instances: Seq[T]): Seq[Parameter[_]] = instances.map(from(_))
+  def from[T](instances: Seq[T]): Seq[Parameter[?]] = instances.map(from(_))
 
   @tailrec
-  final def from[T](instance: T): Parameter[_] = {
+  final def from[T](instance: T): Parameter[?] = {
     instance match {
       case i: BigDecimal => TypeBigDecimal(i)
       case i: Int => TypeInt(i)

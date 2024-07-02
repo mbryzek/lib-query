@@ -6,7 +6,7 @@ import cats.implicits._
 
 object Sanitize {
 
-  private[this] val AcceptedChars: Set[String] = "-_.,{}():=!><'0123456789abcdefghijklmnopqrstuvwxyz".split("").toSet
+  private val AcceptedChars: Set[String] = "-_.,{}():=!><'0123456789abcdefghijklmnopqrstuvwxyz".split("").toSet
   def assertSafe(v: String): Unit = {
     validate(v) match {
       case Valid(_) => ()
