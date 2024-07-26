@@ -100,9 +100,9 @@ class QuerySpec extends AnyWordSpec with Matchers {
   }
 
   "in" in {
-    val q = Query("select 1 from users").in("id", Seq("a", "b"))
-    q.sql() mustBe "select 1 from users where id in ({id}, {id_2})"
-    q.interpolate() mustBe "select 1 from users where id in ('a', 'b')"
+    val q = Query("select 1 from users").in("users.id", Seq("a", "b"))
+    q.sql() mustBe "select 1 from users where users.id in ({users.id}, {users.id_2})"
+    q.interpolate() mustBe "select 1 from users where users.id in ('a', 'b')"
   }
 
   "optionalIn" must {
@@ -141,23 +141,23 @@ class QuerySpec extends AnyWordSpec with Matchers {
 
   "in2" must {
     "simple" in {
-      val q = Query("select 1 from users").in2(("id", "name"), Seq("a", "mike"))
-      q.sql() mustBe "select 1 from users where (id, name) in ({id}, {name})"
-      q.interpolate() mustBe "select 1 from users where (id, name) in ('a', 'mike')"
+      val q = Query("select 1 from users").in2(("users.id", "users.name"), Seq(("a", "mike")))
+      q.sql() mustBe "select 1 from users where (users.id, users.name) in (({users.id}, {users.name}))"
+      q.interpolate() mustBe "select 1 from users where (users.id, users.name) in (('a', 'mike'))"
     }
 
     "same column name" in {
-      val q = Query("select 1 from users").in2(("id", "id"), Seq("a", "mike"))
-      q.sql() mustBe "select 1 from users where (id, id) in ({id}, {id_2})"
-      q.interpolate() mustBe "select 1 from users where (id, id) in ('a', 'mike')"
+      val q = Query("select 1 from users").in2(("id", "id"), Seq(("a", "mike")))
+      q.sql() mustBe "select 1 from users where (id, id) in (({id}, {id_2}))"
+      q.interpolate() mustBe "select 1 from users where (id, id) in (('a', 'mike'))"
     }
   }
 
   "optionalIn2" must {
     "defined" in {
-      val q = Query("select 1 from users").optionalIn2(("id", "name"), Some(Seq("a", "mike")))
-      q.sql() mustBe "select 1 from users where (id, name) in ({id}, {name})"
-      q.interpolate() mustBe "select 1 from users where (id, name) in ('a', 'mike')"
+      val q = Query("select 1 from users").optionalIn2(("id", "name"), Some(Seq(("a", "mike"))))
+      q.sql() mustBe "select 1 from users where (id, name) in (({id}, {name}))"
+      q.interpolate() mustBe "select 1 from users where (id, name) in (('a', 'mike'))"
     }
 
     "empty" in {
@@ -169,23 +169,23 @@ class QuerySpec extends AnyWordSpec with Matchers {
 
   "in3" must {
     "simple" in {
-      val q = Query("select 1 from users").in3(("id", "name", "last"), Seq("a", "mike", "bryzek"))
-      q.sql() mustBe "select 1 from users where (id, name, last) in ({id}, {name}, {last})"
-      q.interpolate() mustBe "select 1 from users where (id, name, last) in ('a', 'mike', 'bryzek')"
+      val q = Query("select 1 from users").in3(("id", "name", "last"), Seq(("a", "mike", "bryzek")))
+      q.sql() mustBe "select 1 from users where (id, name, last) in (({id}, {name}, {last}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last) in (('a', 'mike', 'bryzek'))"
     }
 
     "same column name" in {
-      val q = Query("select 1 from users").in3(("id", "name", "name"), Seq("a", "mike", "bryzek"))
-      q.sql() mustBe "select 1 from users where (id, name, name) in ({id}, {name}, {name_2})"
-      q.interpolate() mustBe "select 1 from users where (id, name, name) in ('a', 'mike', 'bryzek')"
+      val q = Query("select 1 from users").in3(("id", "name", "name"), Seq(("a", "mike", "bryzek")))
+      q.sql() mustBe "select 1 from users where (id, name, name) in (({id}, {name}, {name_2}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, name) in (('a', 'mike', 'bryzek'))"
     }
   }
 
   "optionalIn3" must {
     "defined" in {
-      val q = Query("select 1 from users").optionalIn3(("id", "name", "last"), Some(Seq("a", "mike", "bryzek")))
-      q.sql() mustBe "select 1 from users where (id, name, last) in ({id}, {name}, {last})"
-      q.interpolate() mustBe "select 1 from users where (id, name, last) in ('a', 'mike', 'bryzek')"
+      val q = Query("select 1 from users").optionalIn3(("id", "name", "last"), Some(Seq(("a", "mike", "bryzek"))))
+      q.sql() mustBe "select 1 from users where (id, name, last) in (({id}, {name}, {last}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last) in (('a', 'mike', 'bryzek'))"
     }
 
     "empty" in {
@@ -197,15 +197,15 @@ class QuerySpec extends AnyWordSpec with Matchers {
 
   "in4" must {
     "simple" in {
-      val q = Query("select 1 from users").in4(("id", "name", "last", "middle"), Seq("a", "mike", "bryzek", "maciej"))
-      q.sql() mustBe "select 1 from users where (id, name, last, middle) in ({id}, {name}, {last}, {middle})"
-      q.interpolate() mustBe "select 1 from users where (id, name, last, middle) in ('a', 'mike', 'bryzek', 'maciej')"
+      val q = Query("select 1 from users").in4(("id", "name", "last", "middle"), Seq(("a", "mike", "bryzek", "maciej")))
+      q.sql() mustBe "select 1 from users where (id, name, last, middle) in (({id}, {name}, {last}, {middle}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last, middle) in (('a', 'mike', 'bryzek', 'maciej'))"
     }
 
     "same column name" in {
-      val q = Query("select 1 from users").in4(("id", "name", "name", "name"), Seq("a", "mike", "bryzek", "c"))
-      q.sql() mustBe "select 1 from users where (id, name, name, name) in ({id}, {name}, {name_2}, {name_3})"
-      q.interpolate() mustBe "select 1 from users where (id, name, name, name) in ('a', 'mike', 'bryzek', 'c')"
+      val q = Query("select 1 from users").in4(("id", "name", "name", "name"), Seq(("a", "mike", "bryzek", "c")))
+      q.sql() mustBe "select 1 from users where (id, name, name, name) in (({id}, {name}, {name_2}, {name_3}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, name, name) in (('a', 'mike', 'bryzek', 'c'))"
     }
   }
 
@@ -213,10 +213,10 @@ class QuerySpec extends AnyWordSpec with Matchers {
     "defined" in {
       val q = Query("select 1 from users").optionalIn4(
         ("id", "name", "last", "middle"),
-        Some(Seq("a", "mike", "bryzek", "maciej"))
+        Some(Seq(("a", "mike", "bryzek", "maciej")))
       )
-      q.sql() mustBe "select 1 from users where (id, name, last, middle) in ({id}, {name}, {last}, {middle})"
-      q.interpolate() mustBe "select 1 from users where (id, name, last, middle) in ('a', 'mike', 'bryzek', 'maciej')"
+      q.sql() mustBe "select 1 from users where (id, name, last, middle) in (({id}, {name}, {last}, {middle}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last, middle) in (('a', 'mike', 'bryzek', 'maciej'))"
     }
 
     "empty" in {
@@ -230,17 +230,20 @@ class QuerySpec extends AnyWordSpec with Matchers {
     "simple" in {
       val q = Query("select 1 from users").in5(
         ("id", "name", "last", "middle", "alias"),
-        Seq("a", "mike", "bryzek", "maciej", "foo")
+        Seq(("a", "mike", "bryzek", "maciej", "foo"))
       )
-      q.sql() mustBe "select 1 from users where (id, name, last, middle, alias) in ({id}, {name}, {last}, {middle}, {alias})"
-      q.interpolate() mustBe "select 1 from users where (id, name, last, middle, alias) in ('a', 'mike', 'bryzek', 'maciej', 'foo')"
+      q.sql() mustBe "select 1 from users where (id, name, last, middle, alias) in (({id}, {name}, {last}, {middle}, {alias}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last, middle, alias) in (('a', 'mike', 'bryzek', 'maciej', 'foo'))"
     }
 
     "same column name" in {
       val q =
-        Query("select 1 from users").in5(("id", "name", "name", "name", "name"), Seq("a", "mike", "bryzek", "c", "foo"))
-      q.sql() mustBe "select 1 from users where (id, name, name, name, name) in ({id}, {name}, {name_2}, {name_3}, {name_4})"
-      q.interpolate() mustBe "select 1 from users where (id, name, name, name, name) in ('a', 'mike', 'bryzek', 'c', 'foo')"
+        Query("select 1 from users").in5(
+          ("id", "name", "name", "name", "name"),
+          Seq(("a", "mike", "bryzek", "c", "foo"))
+        )
+      q.sql() mustBe "select 1 from users where (id, name, name, name, name) in (({id}, {name}, {name_2}, {name_3}, {name_4}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, name, name, name) in (('a', 'mike', 'bryzek', 'c', 'foo'))"
     }
   }
 
@@ -248,10 +251,10 @@ class QuerySpec extends AnyWordSpec with Matchers {
     "defined" in {
       val q = Query("select 1 from users").optionalIn5(
         ("id", "name", "last", "middle", "alias"),
-        Some(Seq("a", "mike", "bryzek", "maciej", "foo"))
+        Some(Seq(("a", "mike", "bryzek", "maciej", "foo")))
       )
-      q.sql() mustBe "select 1 from users where (id, name, last, middle, alias) in ({id}, {name}, {last}, {middle}, {alias})"
-      q.interpolate() mustBe "select 1 from users where (id, name, last, middle, alias) in ('a', 'mike', 'bryzek', 'maciej', 'foo')"
+      q.sql() mustBe "select 1 from users where (id, name, last, middle, alias) in (({id}, {name}, {last}, {middle}, {alias}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last, middle, alias) in (('a', 'mike', 'bryzek', 'maciej', 'foo'))"
     }
 
     "empty" in {

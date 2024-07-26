@@ -218,36 +218,48 @@ case class Query(
     }
   }
 
-  def optionalIn2(columns: (String, String), values: Option[Seq[Any]]): Query = {
+  def optionalIn2(columns: (String, String), values: Option[Seq[(Any, Any)]]): Query = {
     values.map(in2(columns, _)).getOrElse(this)
   }
 
-  def in2(columns: (String, String), values: Seq[Any]): Query = {
-    bindInList(Seq(columns._1, columns._2), values)
+  def in2(columns: (String, String), values: Seq[(Any, Any)]): Query = {
+    bindInList(Seq(columns._1, columns._2), values.flatMap { v => Seq(v._1, v._2) })
   }
 
-  def optionalIn3(columns: (String, String, String), values: Option[Seq[Any]]): Query = {
+  def optionalIn3(columns: (String, String, String), values: Option[Seq[(Any, Any, Any)]]): Query = {
     values.map(in3(columns, _)).getOrElse(this)
   }
 
-  def in3(columns: (String, String, String), values: Seq[Any]): Query = {
-    bindInList(Seq(columns._1, columns._2, columns._3), values)
+  def in3(columns: (String, String, String), values: Seq[(Any, Any, Any)]): Query = {
+    bindInList(Seq(columns._1, columns._2, columns._3), values.flatMap { v => Seq(v._1, v._2, v._3) })
   }
 
-  def optionalIn4(columns: (String, String, String, String), values: Option[Seq[Any]]): Query = {
+  def optionalIn4(
+    columns: (String, String, String, String),
+    values: Option[Seq[(Any, Any, Any, Any)]]
+  ): Query = {
     values.map(in4(columns, _)).getOrElse(this)
   }
 
-  def in4(columns: (String, String, String, String), values: Seq[Any]): Query = {
-    bindInList(Seq(columns._1, columns._2, columns._3, columns._4), values)
+  def in4(columns: (String, String, String, String), values: Seq[(Any, Any, Any, Any)]): Query = {
+    bindInList(Seq(columns._1, columns._2, columns._3, columns._4), values.flatMap { v => Seq(v._1, v._2, v._3, v._4) })
   }
 
-  def optionalIn5(columns: (String, String, String, String, String), values: Option[Seq[Any]]): Query = {
+  def optionalIn5(
+    columns: (String, String, String, String, String),
+    values: Option[Seq[(Any, Any, Any, Any, Any)]]
+  ): Query = {
     values.map(in5(columns, _)).getOrElse(this)
   }
 
-  def in5(columns: (String, String, String, String, String), values: Seq[Any]): Query = {
-    bindInList(Seq(columns._1, columns._2, columns._3, columns._4, columns._5), values)
+  def in5(
+    columns: (String, String, String, String, String),
+    values: Seq[(Any, Any, Any, Any, Any)]
+  ): Query = {
+    bindInList(
+      Seq(columns._1, columns._2, columns._3, columns._4, columns._5),
+      values.flatMap { v => Seq(v._1, v._2, v._3, v._4, v._5) }
+    )
   }
 
   def in(name: String, subQuery: Query): Query = {
@@ -369,7 +381,7 @@ case class Query(
         (newQ, names :+ param)
       }
     q.withFilter(
-      QueryFilter(s"(${columns.mkString(", ")}) in (${params.map(_.bindFragment).mkString(", ")})")
+      QueryFilter(s"(${columns.mkString(", ")}) in ((${params.map(_.bindFragment).mkString(", ")}))")
     )
   }
 
