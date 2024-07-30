@@ -199,6 +199,30 @@ case class Query(
     buildIn("not in", "true", column, values)
   }
 
+  def notIn(name: String, subQuery: Query): Query = {
+    subQueryFilter("not in", name, subQuery)
+  }
+
+  private def subQueryFilter(op: String, name: String, subQuery: Query): Query = {
+    Sanitize.assertSafe(name)
+    val (q, sql) = subQuery.bindings
+      .foldLeft((this, subQuery.sql())) { case ((q, sql), bp) =>
+        val (newQ, localParam) = q.bindVar(bp.name, bp.param.original)
+        val modSql = if (localParam.name != bp.name) {
+          // We have a conflict on the name of a bind variable in the subquery.
+          // Modify the subquery to use the new unique bind variable name.
+          sql.replaceAll(s"\\{${bp.name}}", s"{${localParam.name}}")
+        } else {
+          sql
+        }
+        (newQ, modSql)
+      }
+
+    q.withFilter(
+      QueryFilter(s"$name $op ($sql)")
+    )
+  }
+
   private def buildIn(op: String, default: String, column: String, values: Seq[Any]): Query = {
     Sanitize.assertSafe(column)
     if (values.isEmpty) {
@@ -263,23 +287,7 @@ case class Query(
   }
 
   def in(name: String, subQuery: Query): Query = {
-    Sanitize.assertSafe(name)
-    val (q, sql) = subQuery.bindings
-      .foldLeft((this, subQuery.sql())) { case ((q, sql), bp) =>
-        val (newQ, localParam) = q.bindVar(bp.name, bp.param.original)
-        val modSql = if (localParam.name != bp.name) {
-          // We have a conflict on the name of a bind variable in the subquery.
-          // Modify the subquery to use the new unique bind variable name.
-          sql.replaceAll(s"\\{${bp.name}}", s"{${localParam.name}}")
-        } else {
-          sql
-        }
-        (newQ, modSql)
-      }
-
-    q.withFilter(
-      QueryFilter(s"$name in ($sql)")
-    )
+    subQueryFilter("in", name, subQuery)
   }
 
   def optionalLimit(v: Option[Long]): Query = {

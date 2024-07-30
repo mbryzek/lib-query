@@ -99,10 +99,18 @@ class QuerySpec extends AnyWordSpec with Matchers {
     }
   }
 
-  "in" in {
-    val q = Query("select 1 from users").in("users.id", Seq("a", "b"))
-    q.sql() mustBe "select 1 from users where users.id in ({users.id}, {users.id_2})"
-    q.interpolate() mustBe "select 1 from users where users.id in ('a', 'b')"
+  "in" must {
+    "list" in {
+      val q = Query("select 1 from users").in("users.id", Seq("a", "b"))
+      q.sql() mustBe "select 1 from users where users.id in ({users.id}, {users.id_2})"
+      q.interpolate() mustBe "select 1 from users where users.id in ('a', 'b')"
+    }
+
+    "query" in {
+      val q = Query("select 1 from users").in("users.id", Query("select user_id from emails"))
+      q.sql() mustBe "select 1 from users where users.id in (select user_id from emails)"
+      q.interpolate() mustBe "select 1 from users where users.id in (select user_id from emails)"
+    }
   }
 
   "optionalIn" must {
@@ -119,10 +127,19 @@ class QuerySpec extends AnyWordSpec with Matchers {
     }
   }
 
-  "notIn" in {
-    val q = Query("select 1 from users").notIn("id", Seq("a", "b"))
-    q.sql() mustBe "select 1 from users where id not in ({id}, {id_2})"
-    q.interpolate() mustBe "select 1 from users where id not in ('a', 'b')"
+  "notIn" must {
+    "list" in {
+      val q = Query("select 1 from users").notIn("id", Seq("a", "b"))
+      q.sql() mustBe "select 1 from users where id not in ({id}, {id_2})"
+      q.interpolate() mustBe "select 1 from users where id not in ('a', 'b')"
+    }
+
+    "query" in {
+      val q = Query("select 1 from users").notIn("users.id", Query("select user_id from emails"))
+      q.sql() mustBe "select 1 from users where users.id not in (select user_id from emails)"
+      q.interpolate() mustBe "select 1 from users where users.id not in (select user_id from emails)"
+    }
+
   }
 
   "optionalNotIn" must {
