@@ -168,6 +168,18 @@ class QuerySpec extends AnyWordSpec with Matchers {
       q.sql() mustBe "select 1 from users where (id, id) in (({id}, {id_2}))"
       q.interpolate() mustBe "select 1 from users where (id, id) in (('a', 'mike'))"
     }
+
+    "multipleValues" in {
+      val q = Query("select 1 from users").in2(
+        ("id", "name"),
+        Seq(
+          ("a", "mike"),
+          ("b", "lisa")
+        )
+      )
+      q.sql() mustBe "select 1 from users where (id, name) in (({id}, {name}), ({id_2}, {name_2}))"
+      q.interpolate() mustBe "select 1 from users where (id, name) in (('a', 'mike'), ('b', 'lisa'))"
+    }
   }
 
   "optionalIn2" must {
