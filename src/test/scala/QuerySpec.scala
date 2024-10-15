@@ -177,9 +177,8 @@ class QuerySpec extends AnyWordSpec with Matchers {
           ("b", "lisa")
         )
       )
-      println(s"RESULT: " + q.sql())
-      q.sql() mustBe "select 1 from users where (id, id) in (({id}, {name}), ({id_2}, {name_2}))"
-      q.interpolate() mustBe "select 1 from users where (id, id) in (('a', 'mike'), ('b', 'lisa'))"
+      q.sql() mustBe "select 1 from users where (id, name) in (({id}, {name}), ({id_2}, {name_2}))"
+      q.interpolate() mustBe "select 1 from users where (id, name) in (('a', 'mike'), ('b', 'lisa'))"
     }
   }
 

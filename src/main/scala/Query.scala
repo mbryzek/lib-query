@@ -381,15 +381,35 @@ case class Query(
     this.copy(filters = filters ++ newFilters)
   }
 
-  private def bindInList(columns: Seq[String], values: Seq[Any]): Query = {
-    columns.foreach(Sanitize.assertSafe)
+  @tailrec
+  final private def duplicate(columns: Seq[String], target: Int)(implicit result: Seq[String] = Nil): Seq[String] = {
+    if (result.length >= target) {
+      result
+    } else {
+      duplicate(columns, target)(result ++ columns)
+    }
+  }
+
+  private def bindInList(originalColumns: Seq[String], values: Seq[Any]): Query = {
+    originalColumns.foreach(Sanitize.assertSafe)
+    val columns = duplicate(originalColumns, values.length)
+
     val (q: Query, params: Seq[BoundParameter]) =
-      columns.zip(values).foldLeft((this, List.empty[BoundParameter])) { case ((q, names), (n, v)) =>
+      values.zip(columns).foldLeft((this, List.empty[BoundParameter])) { case ((q, names), (v, n)) =>
         val (newQ, param) = q.bindVar(n, v)
         (newQ, names :+ param)
       }
+
+    val paramString = params
+      .grouped(originalColumns.length)
+      .toSeq
+      .map { all =>
+        s"(${all.map(_.bindFragment).mkString(", ")})"
+      }
+      .mkString(", ")
+
     q.withFilter(
-      QueryFilter(s"(${columns.mkString(", ")}) in ((${params.map(_.bindFragment).mkString(", ")}))")
+      QueryFilter(s"(${originalColumns.mkString(", ")}) in ($paramString)")
     )
   }
 
