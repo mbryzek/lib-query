@@ -14,6 +14,13 @@ trait TestHelpers {
     }
   }
 
+  def expectInvalidNec[T](value: ValidatedNec[T, ?]): Seq[T] = {
+    value match {
+      case Invalid(e) => e.toNonEmptyList.toList
+      case Valid(v) => sys.error(s"Expected invalid but got: $v")
+    }
+  }
+
   def expectSuccess[T](f: => T): T = {
     Try(f) match {
       case Success(r) => r

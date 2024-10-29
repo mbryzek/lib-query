@@ -10,7 +10,21 @@ class OrderBySpec extends BaseSpec {
 
   "parse" must {
     "empty" in {
-      OrderBy.parse("")
+      expectValidNec {
+        OrderBy.parse("")
+      }.sql mustBe None
+    }
+
+    "valid identifiers" in {
+      expectValidNec {
+        OrderBy.parse("id, name")
+      }.sql.get mustBe "id, name"
+    }
+
+    "valid identifiers with sort" in {
+      expectValidNec {
+        OrderBy.parse("-id, -name")
+      }.sql.get mustBe "id desc, name desc"
     }
   }
 
