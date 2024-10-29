@@ -1,11 +1,13 @@
 package io.flow.postgresql
 
+import helpers.BaseSpec
+
 import org.scalatest.matchers.must.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 import scala.util.{Failure, Success, Try}
 
-class QuerySpec extends AnyWordSpec with Matchers {
+class QuerySpec extends BaseSpec {
 
   "simple query" in {
     val q = Query("select 1")
