@@ -75,7 +75,7 @@ case class Query(
         case TypeUnit => NamedParameter(b.name, Option.empty[String])
         case _ => NamedParameter(b.name, b.param.value)
       }
-    } *)
+    }*)
   }
 
   def withDebugging: Query = {

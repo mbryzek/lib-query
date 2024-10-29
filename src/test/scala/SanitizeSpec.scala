@@ -1,11 +1,8 @@
 package io.flow.postgresql
 
-import org.scalatest.matchers.must.Matchers
-import org.scalatest.wordspec.AnyWordSpec
-import helpers.TestHelpers
-import scala.util.Try
+import helpers.BaseSpec
 
-class SanitizeSpec extends AnyWordSpec with Matchers with TestHelpers {
+class SanitizeSpec extends BaseSpec {
 
   "simple query" in {
     expectValidNec {
