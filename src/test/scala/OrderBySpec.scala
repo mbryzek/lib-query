@@ -19,6 +19,10 @@ class OrderBySpec extends BaseSpec {
       expectValidNec {
         OrderBy.parse("id, name")
       }.sql.get mustBe "id, name"
+
+      expectValidNec {
+        OrderBy.parse("users.id")
+      }.sql.get mustBe "users.id"
     }
 
     "valid identifiers with sort" in {
