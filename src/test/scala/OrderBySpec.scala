@@ -26,6 +26,13 @@ class OrderBySpec extends BaseSpec {
         OrderBy.parse("-id, -name")
       }.sql.get mustBe "id desc, name desc"
     }
+
+    "invalid identifiers" in {
+      expectInvalidNec {
+        OrderBy.parse("drop table users")
+      } mustBe Seq("Invalid character(s): ' '")
+    }
+
   }
 
 }
