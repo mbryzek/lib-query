@@ -10,6 +10,10 @@ object OrderBy {
   private val SafeFunctions = Set("lower", "upper")
   private val FunctionPattern = """(\w+)\((.*)\)""".r
 
+  def apply(value: String, validValues: Option[Set[String]] = None): OrderBy = {
+    parse(value, validValues).valueOr(e => throw new IllegalArgumentException(e.toNonEmptyList.toList.mkString(", ")))
+  }
+
   def parse(value: String, validValues: Option[Set[String]] = None): ValidatedNec[String, OrderBy] = {
     val terms = value.split(",").map(_.trim).filterNot(_.isEmpty)
 
