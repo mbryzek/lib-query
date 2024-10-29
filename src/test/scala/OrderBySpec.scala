@@ -43,6 +43,17 @@ class OrderBySpec extends BaseSpec {
       parse(None) mustBe "lower(name)"
       parse(Some(Set("name"))) mustBe "lower(name)"
     }
+
+    "uppercase sort" in {
+      def parse(validValues: Option[Set[String]] = None) = {
+        expectValidNec {
+          OrderBy.parse("UPPER(name)", validValues = validValues)
+        }.sql.get
+      }
+
+      parse(None) mustBe "UPPER(name)"
+      parse(Some(Set("name"))) mustBe "UPPER(name)"
+    }
   }
 
 }
