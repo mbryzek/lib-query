@@ -7,7 +7,7 @@ import cats.implicits._
 case class OrderBy(sql: Option[String])
 
 object OrderBy {
-  private val SafeFunctions = Set("lower", "upper")
+  private val SafeFunctions = Set("lower", "upper", "abs")
   private val FunctionPattern = """(\w+)\((.*)\)""".r
 
   def apply(value: String, validValues: Option[Set[String]] = None): OrderBy = {
