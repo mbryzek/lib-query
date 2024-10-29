@@ -30,7 +30,7 @@ class OrderBySpec extends BaseSpec {
     "invalid identifiers" in {
       expectInvalidNec {
         OrderBy.parse("drop table users")
-      } mustBe Seq("Invalid character(s): ' '")
+      } mustBe Seq("Invalid column name: 'drop table users'")
     }
 
     "lowercase sort" in {
