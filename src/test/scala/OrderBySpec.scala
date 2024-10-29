@@ -33,6 +33,16 @@ class OrderBySpec extends BaseSpec {
       } mustBe Seq("Invalid character(s): ' '")
     }
 
+    "lowercase sort" in {
+      def parse(validValues: Option[Set[String]] = None) = {
+        expectValidNec {
+          OrderBy.parse("lower(name)", validValues = validValues)
+        }.sql.get
+      }
+
+      parse(None) mustBe "lower(name)"
+      parse(Some(Set("name"))) mustBe "lower(name)"
+    }
   }
 
 }
