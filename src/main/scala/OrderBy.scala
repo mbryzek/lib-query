@@ -33,8 +33,8 @@ object OrderBy {
 
   private def validateTerm(term: String, validValues: Option[Set[String]]): ValidatedNec[String, String] = {
     term match {
-    case FunctionPattern(func, inner) if SafeFunctions.contains(func.toLowerCase) =>
-      validateTerm(inner, validValues).map(sanitized => s"$func($sanitized)")
+      case FunctionPattern(func, inner) if SafeFunctions.contains(func.toLowerCase) =>
+        validateTerm(inner, validValues).map(sanitized => s"$func($sanitized)")
       case s =>
         if (!s.matches("^[a-zA-Z0-9_]+$")) {
           s"Invalid column name: '$s'".invalidNec
