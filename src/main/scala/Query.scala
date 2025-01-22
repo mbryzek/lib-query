@@ -155,9 +155,6 @@ case class Query(
   }
 
   def or(conditions: Seq[String]): Query = {
-    conditions.foreach { c =>
-      c.split("\\s+").foreach(Sanitize.assertSafe)
-    }
     withFilter(QueryFilter(s"(${conditions.mkString(" or ")})"))
   }
 
