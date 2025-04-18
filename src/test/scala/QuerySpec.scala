@@ -433,6 +433,12 @@ class QuerySpec extends BaseSpec {
     }
   }
 
+  "having" in {
+    val q = Query("select email, count(*) from users").groupBy("email").having("count(*)>1")
+    q.sql() mustBe "select email, count(*) from users group by email having count(*)>1"
+    q.interpolate() mustBe "select email, count(*) from users group by email having count(*)>1"
+  }
+
   "bind variable with qualified name" in {
     val q = Query("select 1 from users").equals("users.id", 1)
     q.sql() mustBe "select 1 from users where users.id = {users.id}::integer"

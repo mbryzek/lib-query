@@ -16,6 +16,7 @@ case class Query(
   offset: Option[Long] = None,
   orderBy: Option[String] = None,
   groupBy: Option[String] = None,
+  having: Option[String] = None,
   debugging: Boolean = false
 ) {
   def as[T](
@@ -105,6 +106,7 @@ case class Query(
         case all => Some("where " + all.map(_.sql).mkString(" and "))
       },
       groupBy.map { v => s"group by $v" },
+      having.map { v => s"having $v" },
       orderBy.map { v => s"order by $v" },
       limit.map { v => s"limit $v" },
       offset.map { v => s"offset $v" }
@@ -318,6 +320,14 @@ case class Query(
 
   def groupBy(by: String): Query = {
     this.copy(groupBy = Some(by))
+  }
+
+  def having(clause: Option[String]): Query = {
+    clause.map(having(_)).getOrElse(this)
+  }
+
+  def having(clause: String): Query = {
+    this.copy(having = Some(clause))
   }
 
   def bind(name: String, value: Any): Query = bindVar(name, value)._1
