@@ -21,6 +21,12 @@ class QuerySpec extends BaseSpec {
     q.interpolate() mustBe "select 1 from users where id = 1"
   }
 
+  "notEquals" in {
+    val q = Query("select 1 from users").notEquals("id", 1)
+    q.sql() mustBe "select 1 from users where id != {id}::integer"
+    q.interpolate() mustBe "select 1 from users where id != 1"
+  }
+
   "and" must {
     "single" in {
       val q = Query("select 1 from users").and("true").and("1=2")

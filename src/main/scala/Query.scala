@@ -137,6 +137,7 @@ case class Query(
   }
 
   def equals(name: String, value: Any): Query = operation("=", name, value)
+  def notEquals(name: String, value: Any): Query = operation("!=", name, value)
   def greaterThan(name: String, value: Any): Query = operation(">", name, value)
   def greaterThanOrEquals(name: String, value: Any): Query = operation(">=", name, value)
   def lessThan(name: String, value: Any): Query = operation("<", name, value)
