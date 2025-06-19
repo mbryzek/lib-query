@@ -1,9 +1,5 @@
 package io.flow.postgresql
 
-import org.scalatest.matchers.must.Matchers
-import org.scalatest.wordspec.AnyWordSpec
-
-import scala.util.{Failure, Success, Try}
 import helpers.BaseSpec
 
 class OrderBySpec extends BaseSpec {
@@ -38,7 +34,7 @@ class OrderBySpec extends BaseSpec {
     }
 
     "lowercase sort" in {
-      def parse(validValues: Option[Set[String]] = None) = {
+      def parse(validValues: Option[Set[String]]) = {
         expectValidNec {
           OrderBy.parse("lower(name)", validValues = validValues)
         }.sql.get
@@ -49,7 +45,7 @@ class OrderBySpec extends BaseSpec {
     }
 
     "uppercase sort" in {
-      def parse(validValues: Option[Set[String]] = None) = {
+      def parse(validValues: Option[Set[String]]) = {
         expectValidNec {
           OrderBy.parse("UPPER(name)", validValues = validValues)
         }.sql.get

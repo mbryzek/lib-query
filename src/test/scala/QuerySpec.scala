@@ -2,9 +2,6 @@ package io.flow.postgresql
 
 import helpers.BaseSpec
 
-import org.scalatest.matchers.must.Matchers
-import org.scalatest.wordspec.AnyWordSpec
-
 import scala.util.{Failure, Success, Try}
 
 class QuerySpec extends BaseSpec {

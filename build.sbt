@@ -2,15 +2,20 @@ name := "lib-query"
 
 organization := "com.github.mbryzek"
 
-ThisBuild / scalaVersion := "3.5.2"
+ThisBuild / scalaVersion := "3.7.1"
 
 ThisBuild / javacOptions ++= Seq("-source", "17", "-target", "17")
-
-version := "0.0.11"
 
 lazy val allScalacOptions = Seq(
   "-feature",
   "-Xfatal-warnings",
+  "-Wunused:locals",
+  "-Wunused:params",
+  "-Wimplausible-patterns",
+  "-Wunused:linted",
+  "-Wunused:unsafe-warn-patvars",
+  "-Wunused:imports",
+  "-Wunused:privates",
 )
 
 lazy val root = project

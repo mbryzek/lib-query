@@ -1,8 +1,7 @@
 package io.flow.postgresql
 
 import cats.data.ValidatedNec
-import cats.data.Validated.{Invalid, Valid}
-import cats.implicits._
+import cats.implicits.*
 
 case class OrderBy(sql: Option[String])
 

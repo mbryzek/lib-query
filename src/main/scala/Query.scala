@@ -39,7 +39,7 @@ case class Query(
     c: java.sql.Connection
   ): Int = {
     Try {
-      anormSql().executeUpdate()(c)
+      anormSql().executeUpdate()(using c)
     } match {
       case Success(v) => v
       case Failure(ex) => {
@@ -53,7 +53,7 @@ case class Query(
     c: java.sql.Connection
   ): Boolean = {
     Try {
-      anormSql().execute()(c)
+      anormSql().execute()(using c)
     } match {
       case Success(v) => v
       case Failure(ex) => {
@@ -394,7 +394,7 @@ case class Query(
     if (result.length >= target) {
       result
     } else {
-      duplicate(columns, target)(result ++ columns)
+      duplicate(columns, target)(using result ++ columns)
     }
   }
 
