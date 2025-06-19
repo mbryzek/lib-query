@@ -1,4 +1,4 @@
-package io.flow.postgresql
+package com.mbryzek.util
 
 import org.joda.time.format.ISODateTimeFormat
 import org.joda.time.{DateTime, LocalDate}

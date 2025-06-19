@@ -1,7 +1,7 @@
-package io.flow.postgresql
+package com.mbryzek.util
 
 import anorm.{NamedParameter, ResultSetParser, Row, SQL, SimpleSql, on}
-import io.flow.postgresql.Parameter.TypeUnit
+import com.mbryzek.util.Parameter.TypeUnit
 
 import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}

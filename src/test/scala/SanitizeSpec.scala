@@ -1,4 +1,4 @@
-package io.flow.postgresql
+package com.mbryzek.util
 
 import helpers.BaseSpec
 
