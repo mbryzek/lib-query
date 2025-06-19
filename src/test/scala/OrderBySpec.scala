@@ -27,10 +27,18 @@ class OrderBySpec extends BaseSpec {
       }.sql.get mustBe "id desc, name desc"
     }
 
-    "valid identifiers with type cast" in {
-      expectValidNec {
-        OrderBy.parse("name::text")
-      }.sql.get mustBe "name::text"
+    "valid identifiers with type cast" must {
+      "valid" in {
+        expectValidNec {
+          OrderBy.parse("name::text")
+        }.sql.get mustBe "name::text"
+      }
+
+      "invalid" in {
+        expectInvalidNec {
+          OrderBy.parse("name::drop table users")
+        } mustBe Seq("Invalid cast: 'drop table users'")
+      }
     }
 
     "invalid identifiers" in {

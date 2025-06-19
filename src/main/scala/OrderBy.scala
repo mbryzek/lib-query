@@ -32,43 +32,47 @@ object OrderBy {
     }
   }
 
-  private def removeCast(term: String): TermWithCast = {
+  private def removeCast(term: String): ValidatedNec[String, TermWithCast] = {
     val i = term.indexOf("::")
     if (i < 0) {
-      TermWithCast(term.trim, None)
+      TermWithCast(term.trim, None).validNec
     } else {
       val cast = term.substring(i + 2).trim
-      TermWithCast(term.substring(0, i).trim, Some(cast))
+      validateTerm("cast", cast, validValues = None).map { _ =>
+        TermWithCast(term.substring(0, i).trim, Some(cast))
+      }
     }
   }
 
   private def parseTerm(originalTerm: String, validValues: Option[Set[String]]): ValidatedNec[String, String] = {
-    val twc = removeCast(originalTerm)
-    val (isDesc, value) = twc.term match {
-      case s if s.startsWith("-") => (true, s.substring(1))
-      case s => (false, s)
-    }
-
-    validateTerm(value, validValues).map { sanitized =>
-      val t = twc.withCast(sanitized)
-      if (isDesc) s"$t desc" else t
-    }
-  }
-
-  private def validateTerm(term: String, validValues: Option[Set[String]]): ValidatedNec[String, String] = term match {
-    case FunctionPattern(func, inner) if SafeFunctions.contains(func.toLowerCase) =>
-      validateTerm(inner, validValues).map(sanitized => s"$func($sanitized)")
-    case s =>
-      if (!s.matches("^[a-zA-Z0-9_]+(\\.[a-zA-Z0-9_]+)?$")) {
-        s"Invalid column name: '$s'".invalidNec
-      } else {
-        // For table.column format, only validate the column part if validValues is specified
-        val columnName = s.split("\\.").last
-        validValues match {
-          case Some(values) if !values.contains(columnName) =>
-            s"Invalid sort field '$columnName'. Valid values are: ${values.mkString(", ")}".invalidNec
-          case _ => s.validNec
-        }
+    removeCast(originalTerm).andThen { twc =>
+      val (isDesc, value) = twc.term match {
+        case s if s.startsWith("-") => (true, s.substring(1))
+        case s => (false, s)
       }
+
+      validateTerm("column name", value, validValues).map { sanitized =>
+        val t = twc.withCast(sanitized)
+        if (isDesc) s"$t desc" else t
+      }
+    }
   }
+
+  private def validateTerm(what: String, term: String, validValues: Option[Set[String]]): ValidatedNec[String, String] =
+    term match {
+      case FunctionPattern(func, inner) if SafeFunctions.contains(func.toLowerCase) =>
+        validateTerm("column name", inner, validValues).map(sanitized => s"$func($sanitized)")
+      case s =>
+        if (!s.matches("^[a-zA-Z0-9_]+(\\.[a-zA-Z0-9_]+)?$")) {
+          s"Invalid $what: '$s'".invalidNec
+        } else {
+          // For table.column format, only validate the column part if validValues is specified
+          val columnName = s.split("\\.").last
+          validValues match {
+            case Some(values) if !values.contains(columnName) =>
+              s"Invalid sort field '$columnName'. Valid values are: ${values.mkString(", ")}".invalidNec
+            case _ => s.validNec
+          }
+        }
+    }
 }
