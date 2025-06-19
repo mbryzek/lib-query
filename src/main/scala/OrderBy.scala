@@ -23,14 +23,35 @@ object OrderBy {
       }
   }
 
-  private def parseTerm(term: String, validValues: Option[Set[String]]): ValidatedNec[String, String] = {
-    val (isDesc, value) = term.trim match {
+  private case class TermWithCast(term: String, cast: Option[String]) {
+    def withCast(term: String): String = {
+      cast match {
+        case Some(c) => s"$term::$c"
+        case None => term
+      }
+    }
+  }
+
+  private def removeCast(term: String): TermWithCast = {
+    val i = term.indexOf("::")
+    if (i < 0) {
+      TermWithCast(term.trim, None)
+    } else {
+      val cast = term.substring(i + 2).trim
+      TermWithCast(term.substring(0, i).trim, Some(cast))
+    }
+  }
+
+  private def parseTerm(originalTerm: String, validValues: Option[Set[String]]): ValidatedNec[String, String] = {
+    val twc = removeCast(originalTerm)
+    val (isDesc, value) = twc.term match {
       case s if s.startsWith("-") => (true, s.substring(1))
       case s => (false, s)
     }
 
     validateTerm(value, validValues).map { sanitized =>
-      if (isDesc) s"$sanitized desc" else sanitized
+      val t = twc.withCast(sanitized)
+      if (isDesc) s"$t desc" else t
     }
   }
 

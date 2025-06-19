@@ -396,11 +396,18 @@ class QuerySpec extends BaseSpec {
     q.interpolate() mustBe "select 1 from users order by id"
   }
 
+  "orderBy json cast to text" in {
+    val q = Query("select 1 from users").orderBy("name::text")
+    q.sql() mustBe "select 1 from users order by name::text"
+    q.interpolate() mustBe "select 1 from users order by name::text"
+  }
+
   "optionalOrderBy" must {
     "defined" in {
       val q = Query("select 1 from users").orderBy(Some("id"))
       q.sql() mustBe "select 1 from users order by id"
       q.interpolate() mustBe "select 1 from users order by id"
+      println(q.interpolate())
     }
 
     "empty" in {
