@@ -27,6 +27,12 @@ class OrderBySpec extends BaseSpec {
       }.sql.get mustBe "id desc, name desc"
     }
 
+    "valid identifiers with quoted reserved words" in {
+      expectValidNec {
+        OrderBy.parse("-\"order\"")
+      }.sql.get mustBe "\"order\" desc"
+    }
+
     "valid identifiers with type cast" must {
       "valid" in {
         expectValidNec {

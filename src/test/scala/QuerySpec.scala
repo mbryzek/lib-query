@@ -402,6 +402,11 @@ class QuerySpec extends BaseSpec {
     q.interpolate() mustBe "select 1 from users order by name::text"
   }
 
+  "orderBy quoted reserved word" in {
+    val q = Query("select 1 from users").orderBy("\"order\"")
+    q.sql() mustBe "select 1 from users order by \"order\""
+  }
+
   "optionalOrderBy" must {
     "defined" in {
       val q = Query("select 1 from users").orderBy(Some("id"))

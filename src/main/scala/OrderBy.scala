@@ -3,6 +3,8 @@ package com.mbryzek.util
 import cats.data.ValidatedNec
 import cats.implicits.*
 
+import scala.annotation.tailrec
+
 case class OrderBy(sql: Option[String])
 
 object OrderBy {
@@ -38,7 +40,7 @@ object OrderBy {
       TermWithCast(term.trim, None).validNec
     } else {
       val cast = term.substring(i + 2).trim
-      validateTerm("cast", cast, validValues = None).map { _ =>
+      validateTerm("cast", Term(cast), validValues = None).map { _ =>
         TermWithCast(term.substring(0, i).trim, Some(cast))
       }
     }
@@ -51,17 +53,21 @@ object OrderBy {
         case s => (false, s)
       }
 
-      validateTerm("column name", value, validValues).map { sanitized =>
+      validateTerm("column name", Term(value), validValues).map { sanitized =>
         val t = twc.withCast(sanitized)
         if (isDesc) s"$t desc" else t
       }
     }
   }
 
-  private def validateTerm(what: String, term: String, validValues: Option[Set[String]]): ValidatedNec[String, String] =
-    term match {
+  private case class Term(original: String) {
+    val unwrapped: String = unwrapQuotes(original)
+  }
+
+  private def validateTerm(what: String, term: Term, validValues: Option[Set[String]]): ValidatedNec[String, String] =
+    term.unwrapped match {
       case FunctionPattern(func, inner) if SafeFunctions.contains(func.toLowerCase) =>
-        validateTerm("column name", inner, validValues).map(sanitized => s"$func($sanitized)")
+        validateTerm("column name", Term(inner), validValues).map(sanitized => s"$func($sanitized)")
       case s =>
         if (!s.matches("^[a-zA-Z0-9_]+(\\.[a-zA-Z0-9_]+)?$")) {
           s"Invalid $what: '$s'".invalidNec
@@ -71,8 +77,19 @@ object OrderBy {
           validValues match {
             case Some(values) if !values.contains(columnName) =>
               s"Invalid sort field '$columnName'. Valid values are: ${values.mkString(", ")}".invalidNec
-            case _ => s.validNec
+            case _ => term.original.validNec
           }
         }
     }
+
+  @tailrec
+  private def unwrapQuotes(term: String): String = {
+    val isWrappedInQuotes: Boolean = term.startsWith("\"") && term.endsWith("\"")
+
+    if (isWrappedInQuotes) {
+      unwrapQuotes(term.substring(1, term.length - 1))
+    } else {
+      term
+    }
+  }
 }
