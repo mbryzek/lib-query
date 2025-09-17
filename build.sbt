@@ -2,7 +2,7 @@ name := "lib-query"
 
 organization := "com.github.mbryzek"
 
-ThisBuild / scalaVersion := "3.7.1"
+ThisBuild / scalaVersion := "3.7.3"
 
 ThisBuild / javacOptions ++= Seq("-source", "17", "-target", "17")
 
