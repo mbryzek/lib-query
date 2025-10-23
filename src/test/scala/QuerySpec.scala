@@ -125,6 +125,11 @@ class QuerySpec extends BaseSpec {
       q.interpolate() mustBe "select 1 from users"
     }
 
+    "empty list" in {
+      val q = Query("select 1 from users").optionalIn("id", Some(Nil))
+      q.sql() mustBe "select 1 from users where false"
+    }
+
     "specified" in {
       val q = Query("select 1 from users").optionalIn("id", Some(Seq("a", "b")))
       q.sql() mustBe "select 1 from users where id in ({id}, {id_2})"
