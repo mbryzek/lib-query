@@ -225,8 +225,8 @@ class QuerySpec extends BaseSpec {
 
     "specified but empty" in {
       val q = Query("select 1 from users").optionalIn2(("id", "id"), Some(Nil))
-      q.sql() mustBe "select 1 from users where false // in clause specified for columns id, id with no values"
-      q.interpolate() mustBe "select 1 from users where false // in clause specified for columns id, id with no values"
+      q.sql() mustBe "select 1 from users\n where false -- in clause specified for columns id, id with no values"
+      q.interpolate() mustBe "select 1 from users\n where false -- in clause specified for columns id, id with no values"
     }
   }
 
@@ -259,8 +259,8 @@ class QuerySpec extends BaseSpec {
 
     "specified but empty" in {
       val q = Query("select 1 from users").optionalIn3(("id", "id", "id"), Some(Nil))
-      q.sql() mustBe "select 1 from users where false"
-      q.interpolate() mustBe "select 1 from users where false"
+      q.sql() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id with no values"
+      q.interpolate() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id with no values"
     }
   }
 
@@ -296,8 +296,8 @@ class QuerySpec extends BaseSpec {
 
     "specified but empty" in {
       val q = Query("select 1 from users").optionalIn4(("id", "id", "id", "id"), Some(Nil))
-      q.sql() mustBe "select 1 from users where false"
-      q.interpolate() mustBe "select 1 from users where false"
+      q.sql() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id, id with no values"
+      q.interpolate() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id, id with no values"
     }
   }
 
@@ -340,8 +340,8 @@ class QuerySpec extends BaseSpec {
 
     "specified but empty" in {
       val q = Query("select 1 from users").optionalIn5(("id", "id", "id", "id", "id"), Some(Nil))
-      q.sql() mustBe "select 1 from users where false"
-      q.interpolate() mustBe "select 1 from users where false"
+      q.sql() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id, id, id with no values"
+      q.interpolate() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id, id, id with no values"
     }
   }
 

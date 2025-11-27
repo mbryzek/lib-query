@@ -101,31 +101,39 @@ case class Query(
   private def generateSql(): String = {
     Seq(
       Some(baseQuery),
-      filters.toList match {
-        case Nil => None
-        case _ =>
-          Some(
-            filters.zipWithIndex
-              .map { case (f, i) =>
-                val keyword = if (i == 0) "where" else "and"
-                val c = f.comment.map(_.trim).getOrElse("")
-                if (c.isEmpty) {
-                  s" ${keyword} " + f.sql
-                } else {
-                  val spaces = 6 - keyword.length // align right with "select" keyword in base query
-                  "\n" + (" " * spaces) + keyword + " " + f.sql + s" -- $c\n"
-                }
-              }
-              .mkString("")
-              .strip
-          )
-      },
+      generateSqlFilters(),
       groupBy.map { v => s"group by $v" },
       having.map { v => s"having $v" },
       orderBy.map { v => s"order by $v" },
       limit.map { v => s"limit $v" },
       offset.map { v => s"offset $v" }
-    ).flatten.mkString(" ")
+    ).flatten.foldLeft("") { case (acc, part) =>
+      if (acc.isEmpty) part
+      else if (part.startsWith("\n")) acc + part
+      else acc + " " + part
+    }
+  }
+
+  private def generateSqlFilters(): Option[String] = {
+    filters.toList match {
+      case Nil => None
+      case _ =>
+        Some(
+          filters.zipWithIndex
+            .map { case (f, i) =>
+              val keyword = if (i == 0) "where" else " and"
+              val c = f.comment.map(_.trim).getOrElse("")
+              if (c.isEmpty) {
+                s"${keyword} ${f.sql}"
+              } else {
+                val spaces = 6 - keyword.length // align right with "select" keyword in base query
+                "\n" + (" " * spaces) + keyword + " " + f.sql + s" -- $c\n"
+              }
+            }
+            .mkString("")
+            .stripTrailing
+        )
+    }
   }
 
   def interpolate(): String = {
