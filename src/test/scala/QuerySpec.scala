@@ -24,6 +24,24 @@ class QuerySpec extends BaseSpec {
     q.interpolate() mustBe "select 1 from users where id != 1"
   }
 
+  "matchNoRows" must {
+    "default" in {
+      val q = Query("select 1 from users").matchNoRows()
+      println(q.sql())
+      q.sql() mustBe "select 1 from users where false"
+    }
+
+    "with comment" in {
+      val q = Query("select 1 from users").matchNoRows(comment = Some(" test "))
+      println(q.sql())
+      q.sql() mustBe
+        """
+          |select 1 from users
+          | where false -- test
+          |""".stripMargin.strip
+    }
+  }
+
   "and" must {
     "single" in {
       val q = Query("select 1 from users").and("true").and("1=2")
@@ -204,6 +222,12 @@ class QuerySpec extends BaseSpec {
       q.sql() mustBe "select 1 from users"
       q.interpolate() mustBe "select 1 from users"
     }
+
+    "specified but empty" in {
+      val q = Query("select 1 from users").optionalIn2(("id", "id"), Some(Nil))
+      q.sql() mustBe "select 1 from users\n where false -- in clause specified for columns id, id with no values"
+      q.interpolate() mustBe "select 1 from users\n where false -- in clause specified for columns id, id with no values"
+    }
   }
 
   "in3" must {
@@ -231,6 +255,12 @@ class QuerySpec extends BaseSpec {
       val q = Query("select 1 from users").optionalIn3(("id", "name", "last"), None)
       q.sql() mustBe "select 1 from users"
       q.interpolate() mustBe "select 1 from users"
+    }
+
+    "specified but empty" in {
+      val q = Query("select 1 from users").optionalIn3(("id", "id", "id"), Some(Nil))
+      q.sql() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id with no values"
+      q.interpolate() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id with no values"
     }
   }
 
@@ -262,6 +292,12 @@ class QuerySpec extends BaseSpec {
       val q = Query("select 1 from users").optionalIn4(("id", "name", "last", "middle"), None)
       q.sql() mustBe "select 1 from users"
       q.interpolate() mustBe "select 1 from users"
+    }
+
+    "specified but empty" in {
+      val q = Query("select 1 from users").optionalIn4(("id", "id", "id", "id"), Some(Nil))
+      q.sql() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id, id with no values"
+      q.interpolate() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id, id with no values"
     }
   }
 
@@ -300,6 +336,12 @@ class QuerySpec extends BaseSpec {
       val q = Query("select 1 from users").optionalIn5(("id", "name", "last", "middle", "alias"), None)
       q.sql() mustBe "select 1 from users"
       q.interpolate() mustBe "select 1 from users"
+    }
+
+    "specified but empty" in {
+      val q = Query("select 1 from users").optionalIn5(("id", "id", "id", "id", "id"), Some(Nil))
+      q.sql() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id, id, id with no values"
+      q.interpolate() mustBe "select 1 from users\n where false -- in clause specified for columns id, id, id, id, id with no values"
     }
   }
 
