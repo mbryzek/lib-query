@@ -2,7 +2,7 @@ name := "lib-query"
 
 organization := "com.github.mbryzek"
 
-ThisBuild / scalaVersion := "3.7.3"
+ThisBuild / scalaVersion := "3.7.4"
 
 ThisBuild / javacOptions ++= Seq("-source", "17", "-target", "17")
 
@@ -29,7 +29,7 @@ lazy val root = project
     scalacOptions ++= allScalacOptions,
     libraryDependencies ++= Seq(
       "org.playframework.anorm" %% "anorm-postgres" % "2.7.0",
-      "org.typelevel" %% "cats-core" % "2.12.0",
+      "org.typelevel" %% "cats-core" % "2.13.0",
       "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.1" % Test,
     ),
   )
