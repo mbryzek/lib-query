@@ -117,7 +117,7 @@ case class Query(
                 }
               }
               .mkString("")
-              .stripTrailing
+              .strip
           )
       },
       groupBy.map { v => s"group by $v" },
