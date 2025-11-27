@@ -6,7 +6,7 @@ import com.mbryzek.util.Parameter.TypeUnit
 import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
 
-case class QueryFilter(sql: String)
+case class QueryFilter(sql: String, comment: Option[String] = None)
 
 case class Query(
   baseQuery: String,
@@ -103,7 +103,22 @@ case class Query(
       Some(baseQuery),
       filters.toList match {
         case Nil => None
-        case all => Some("where " + all.map(_.sql).mkString(" and "))
+        case _ =>
+          Some(
+            filters.zipWithIndex
+              .map { case (f, i) =>
+                val keyword = if (i == 0) "where" else "and"
+                val c = f.comment.map(_.trim).getOrElse("")
+                if (c.isEmpty) {
+                  s" ${keyword} " + f.sql
+                } else {
+                  val spaces = 6 - keyword.length // align right with "select" keyword in base query
+                  "\n" + (" " * spaces) + keyword + " " + f.sql + s" -- $c\n"
+                }
+              }
+              .mkString("")
+              .stripTrailing
+          )
       },
       groupBy.map { v => s"group by $v" },
       having.map { v => s"having $v" },
@@ -145,6 +160,10 @@ case class Query(
   def lessThan(name: String, value: Any): Query = operation("<", name, value)
   def lessThanOrEquals(name: String, value: Any): Query = operation("<=", name, value)
 
+  def matchNoRows(comment: Option[String] = None): Query = {
+    withFilter(QueryFilter("false", comment))
+  }
+
   def and(condition: String): Query = {
     and(Seq(condition))
   }
@@ -154,7 +173,7 @@ case class Query(
   }
 
   def and(conditions: Seq[String]): Query = {
-    withFilters(conditions.map(QueryFilter.apply))
+    withFilters(conditions.map(QueryFilter(_)))
   }
 
   def or(conditions: Seq[String]): Query = {
@@ -399,26 +418,30 @@ case class Query(
   }
 
   private def bindInList(originalColumns: Seq[String], values: Seq[Any]): Query = {
-    originalColumns.foreach(Sanitize.assertSafe)
-    val columns = duplicate(originalColumns, values.length)
+    if (values.isEmpty) {
+      matchNoRows(comment = Some(s"in clause specified for columns ${originalColumns.mkString(", ")} with no values"))
+    } else {
+      originalColumns.foreach(Sanitize.assertSafe)
+      val columns = duplicate(originalColumns, values.length)
 
-    val (q: Query, params: Seq[BoundParameter]) =
-      values.zip(columns).foldLeft((this, List.empty[BoundParameter])) { case ((q, names), (v, n)) =>
-        val (newQ, param) = q.bindVar(n, v)
-        (newQ, names :+ param)
-      }
+      val (q: Query, params: Seq[BoundParameter]) =
+        values.zip(columns).foldLeft((this, List.empty[BoundParameter])) { case ((q, names), (v, n)) =>
+          val (newQ, param) = q.bindVar(n, v)
+          (newQ, names :+ param)
+        }
 
-    val paramString = params
-      .grouped(originalColumns.length)
-      .toSeq
-      .map { all =>
-        s"(${all.map(_.bindFragment).mkString(", ")})"
-      }
-      .mkString(", ")
+      val paramString = params
+        .grouped(originalColumns.length)
+        .toSeq
+        .map { all =>
+          s"(${all.map(_.bindFragment).mkString(", ")})"
+        }
+        .mkString(", ")
 
-    q.withFilter(
-      QueryFilter(s"(${originalColumns.mkString(", ")}) in ($paramString)")
-    )
+      q.withFilter(
+        QueryFilter(s"(${originalColumns.mkString(", ")}) in ($paramString)")
+      )
+    }
   }
 
 }
