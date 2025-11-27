@@ -131,7 +131,7 @@ case class Query(
               }
             }
             .mkString("")
-            .stripTrailing
+            .replaceAll("\\s+$", "")
         )
     }
   }
