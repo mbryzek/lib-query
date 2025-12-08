@@ -1,4 +1,4 @@
-package com.mbryzek.util
+package com.bryzek.util
 
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNec

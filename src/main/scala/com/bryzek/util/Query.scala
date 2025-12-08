@@ -1,7 +1,7 @@
-package com.mbryzek.util
+package com.bryzek.util
 
 import anorm.{NamedParameter, ResultSetParser, Row, SQL, SimpleSql, on}
-import com.mbryzek.util.Parameter.TypeUnit
+import com.bryzek.util.Parameter.TypeUnit
 
 import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
