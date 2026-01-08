@@ -29,8 +29,8 @@ case class Query(
     } match {
       case Success(v) => v
       case Failure(ex) => {
-        ex.printStackTrace(System.err)
-        sys.error(s"Error executing SQL Query: ${ex.getMessage}\n${sql()}")
+        maybeLogSyntaxError(ex)
+        throw ex
       }
     }
   }
@@ -43,7 +43,7 @@ case class Query(
     } match {
       case Success(v) => v
       case Failure(ex) => {
-        maybeReportError(ex)
+        maybeLogSyntaxError(ex)
         throw ex
       }
     }
@@ -57,13 +57,13 @@ case class Query(
     } match {
       case Success(v) => v
       case Failure(ex) => {
-        maybeReportError(ex)
+        maybeLogSyntaxError(ex)
         throw ex
       }
     }
   }
 
-  private def maybeReportError(ex: Throwable): Unit = {
+  private def maybeLogSyntaxError(ex: Throwable): Unit = {
     if (ex.getMessage.contains("syntax error")) {
       println(s"SQL Syntax Error. Query:\n${generateSql()}")
       ex.printStackTrace(System.err)
