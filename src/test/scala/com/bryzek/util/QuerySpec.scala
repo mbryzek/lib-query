@@ -495,6 +495,84 @@ class QuerySpec extends BaseSpec {
     q.interpolate() mustBe "select email, count(*) from users group by email having count(*)>1"
   }
 
+  "union" must {
+    "simple" in {
+      val q = Query("select id from users").union(Query("select id from admins"))
+      q.sql() mustBe "select id from users UNION select id from admins"
+      q.interpolate() mustBe "select id from users UNION select id from admins"
+    }
+
+    "with filters" in {
+      val q = Query("select id from users")
+        .equals("status", "active")
+        .union(Query("select id from admins").equals("role", "super"))
+      q.sql() mustBe "select id from users where status = {status} UNION select id from admins where role = {role}"
+      q.interpolate() mustBe "select id from users where status = 'active' UNION select id from admins where role = 'super'"
+    }
+
+    "with same bind variable name uses first value for all" in {
+      val q = Query("select id from users")
+        .equals("status", "active")
+        .union(Query("select id from admins").equals("status", "enabled"))
+      q.sql() mustBe "select id from users where status = {status} UNION select id from admins where status = {status}"
+      // Note: same bind variable name means first value is used for both
+      q.interpolate() mustBe "select id from users where status = 'active' UNION select id from admins where status = 'active'"
+    }
+
+    "with different bind variable names" in {
+      val q = Query("select id from users")
+        .equals("user_status", "active")
+        .union(Query("select id from admins").equals("admin_status", "enabled"))
+      q.sql() mustBe "select id from users where user_status = {user_status} UNION select id from admins where admin_status = {admin_status}"
+      q.interpolate() mustBe "select id from users where user_status = 'active' UNION select id from admins where admin_status = 'enabled'"
+    }
+
+    "with order by applies to combined result" in {
+      val q = Query("select id from users")
+        .union(Query("select id from admins"))
+        .orderBy("id")
+      q.sql() mustBe "select id from users UNION select id from admins order by id"
+    }
+
+    "with limit applies to combined result" in {
+      val q = Query("select id from users")
+        .union(Query("select id from admins"))
+        .limit(10)
+      q.sql() mustBe "select id from users UNION select id from admins limit 10"
+    }
+  }
+
+  "unionAll" must {
+    "simple" in {
+      val q = Query("select id from users").unionAll(Query("select id from admins"))
+      q.sql() mustBe "select id from users UNION ALL select id from admins"
+      q.interpolate() mustBe "select id from users UNION ALL select id from admins"
+    }
+
+    "with filters" in {
+      val q = Query("select id from users")
+        .equals("status", "active")
+        .unionAll(Query("select id from admins").equals("role", "super"))
+      q.sql() mustBe "select id from users where status = {status} UNION ALL select id from admins where role = {role}"
+      q.interpolate() mustBe "select id from users where status = 'active' UNION ALL select id from admins where role = 'super'"
+    }
+
+    "with in clause using different column names" in {
+      val q = Query("select id from users")
+        .in("user_status", Seq("active", "pending"))
+        .unionAll(Query("select id from admins").in("admin_status", Seq("enabled", "disabled")))
+      q.sql() mustBe "select id from users where user_status in ({user_status}, {user_status_2}) UNION ALL select id from admins where admin_status in ({admin_status}, {admin_status_2})"
+      q.interpolate() mustBe "select id from users where user_status in ('active', 'pending') UNION ALL select id from admins where admin_status in ('enabled', 'disabled')"
+    }
+
+    "multiple unions" in {
+      val q = Query("select id from users")
+        .unionAll(Query("select id from admins"))
+        .unionAll(Query("select id from guests"))
+      q.sql() mustBe "select id from users UNION ALL select id from admins UNION ALL select id from guests"
+    }
+  }
+
   "bind variable with qualified name" in {
     val q = Query("select 1 from users").equals("users.id", 1)
     q.sql() mustBe "select 1 from users where users.id = {users.id}::integer"
