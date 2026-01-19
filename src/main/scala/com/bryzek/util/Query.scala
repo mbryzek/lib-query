@@ -17,6 +17,7 @@ case class Query(
   orderBy: Option[String] = None,
   groupBy: Option[String] = None,
   having: Option[String] = None,
+  unions: Seq[(String, Query)] = Nil,
   debugging: Boolean = false
 ) {
   def as[T](
@@ -71,12 +72,16 @@ case class Query(
   }
 
   def anormSql(): SimpleSql[Row] = {
-    SQL(sql()).on(bindings.map { b =>
+    SQL(sql()).on(allBindings.map { b =>
       b.param match {
         case TypeUnit => NamedParameter(b.name, Option.empty[String])
         case _ => NamedParameter(b.name, b.param.value)
       }
     }*)
+  }
+
+  private def allBindings: Seq[BoundParameter] = {
+    bindings ++ unions.flatMap(_._2.allBindings)
   }
 
   def withDebugging: Query = {
@@ -99,11 +104,23 @@ case class Query(
   }
 
   private def generateSql(): String = {
-    Seq(
+    val mainQuery = Seq(
       Some(baseQuery),
       generateSqlFilters(),
       groupBy.map { v => s"group by $v" },
-      having.map { v => s"having $v" },
+      having.map { v => s"having $v" }
+    ).flatten.foldLeft("") { case (acc, part) =>
+      if (acc.isEmpty) part
+      else if (part.startsWith("\n")) acc + part
+      else acc + " " + part
+    }
+
+    val withUnions = unions.foldLeft(mainQuery) { case (sql, (unionType, query)) =>
+      s"$sql $unionType ${query.generateSql()}"
+    }
+
+    Seq(
+      Some(withUnions),
       orderBy.map { v => s"order by $v" },
       limit.map { v => s"limit $v" },
       offset.map { v => s"offset $v" }
@@ -137,7 +154,7 @@ case class Query(
   }
 
   def interpolate(): String = {
-    bindings.foldLeft(generateSql()) { case (s, bp) =>
+    allBindings.foldLeft(generateSql()) { case (s, bp) =>
       (bp.param.cast.toSeq.map { c => s"::$c" } :+ "").distinct
         .map { c =>
           s"\\{${bp.name}}$c"
@@ -355,6 +372,14 @@ case class Query(
 
   def having(clause: String): Query = {
     this.copy(having = Some(clause))
+  }
+
+  def union(other: Query): Query = {
+    this.copy(unions = unions :+ ("UNION", other))
+  }
+
+  def unionAll(other: Query): Query = {
+    this.copy(unions = unions :+ ("UNION ALL", other))
   }
 
   def bind(name: String, value: Any): Query = bindVar(name, value)._1
