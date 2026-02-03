@@ -60,7 +60,7 @@ object Parameter {
   case class TypeLong(override val original: Long) extends Parameter[Long] {
     override def value: String = original.toString
     override def interpolationValue: String = value
-    override def cast: Option[String] = Some("long")
+    override def cast: Option[String] = Some("bigint")
   }
   case class TypeNumber(override val original: Number) extends Parameter[Number] {
     override def value: String = original.toString
