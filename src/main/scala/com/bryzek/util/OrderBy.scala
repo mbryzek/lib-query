@@ -55,7 +55,7 @@ object OrderBy {
 
       validateTerm("column name", Term(value), validValues).map { sanitized =>
         val t = twc.withCast(sanitized)
-        if (isDesc) s"$t desc" else t
+        if (isDesc) s"$t desc nulls last" else t
       }
     }
   }

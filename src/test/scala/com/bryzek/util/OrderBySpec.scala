@@ -24,13 +24,13 @@ class OrderBySpec extends BaseSpec {
     "valid identifiers with sort" in {
       expectValidNec {
         OrderBy.parse("-id, -name")
-      }.sql.get mustBe "id desc, name desc"
+      }.sql.get mustBe "id desc nulls last, name desc nulls last"
     }
 
     "valid identifiers with quoted reserved words" in {
       expectValidNec {
         OrderBy.parse("-\"order\"")
-      }.sql.get mustBe "\"order\" desc"
+      }.sql.get mustBe "\"order\" desc nulls last"
     }
 
     "valid identifiers with type cast" must {
