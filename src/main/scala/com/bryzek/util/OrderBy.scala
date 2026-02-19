@@ -11,15 +11,21 @@ object OrderBy {
   private val SafeFunctions = Set("lower", "upper", "abs")
   private val FunctionPattern = """(\w+)\((.*)\)""".r
 
-  def apply(value: String, validValues: Option[Set[String]] = None): OrderBy = {
-    parse(value, validValues).valueOr(e => throw new IllegalArgumentException(e.toNonEmptyList.toList.mkString(", ")))
+  def apply(value: String, validValues: Option[Set[String]] = None, nullsLast: Boolean = false): OrderBy = {
+    parse(value, validValues, nullsLast).valueOr(e =>
+      throw new IllegalArgumentException(e.toNonEmptyList.toList.mkString(", "))
+    )
   }
 
-  def parse(value: String, validValues: Option[Set[String]] = None): ValidatedNec[String, OrderBy] = {
+  def parse(
+    value: String,
+    validValues: Option[Set[String]] = None,
+    nullsLast: Boolean = false
+  ): ValidatedNec[String, OrderBy] = {
     val terms = value.split(",").map(_.trim).filterNot(_.isEmpty)
 
     terms.toList
-      .traverse(parseTerm(_, validValues))
+      .traverse(parseTerm(_, validValues, nullsLast))
       .map { v =>
         if (v.isEmpty) OrderBy(None) else OrderBy(Some(v.mkString(", ")))
       }
@@ -46,7 +52,11 @@ object OrderBy {
     }
   }
 
-  private def parseTerm(originalTerm: String, validValues: Option[Set[String]]): ValidatedNec[String, String] = {
+  private def parseTerm(
+    originalTerm: String,
+    validValues: Option[Set[String]],
+    nullsLast: Boolean
+  ): ValidatedNec[String, String] = {
     removeCast(originalTerm).andThen { twc =>
       val (isDesc, value) = twc.term match {
         case s if s.startsWith("-") => (true, s.substring(1))
@@ -55,7 +65,7 @@ object OrderBy {
 
       validateTerm("column name", Term(value), validValues).map { sanitized =>
         val t = twc.withCast(sanitized)
-        if (isDesc) s"$t desc" else t
+        if (isDesc) s"$t desc${if (nullsLast) " nulls last" else ""}" else t
       }
     }
   }

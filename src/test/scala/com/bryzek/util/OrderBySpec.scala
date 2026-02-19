@@ -76,4 +76,30 @@ class OrderBySpec extends BaseSpec {
     }
   }
 
+  "nullsLast" must {
+    "not applied by default" in {
+      expectValidNec {
+        OrderBy.parse("-id, -name")
+      }.sql.get mustBe "id desc, name desc"
+    }
+
+    "appended to desc terms when nullsLast=true" in {
+      expectValidNec {
+        OrderBy.parse("-id, -name", nullsLast = true)
+      }.sql.get mustBe "id desc nulls last, name desc nulls last"
+    }
+
+    "not appended to asc terms when nullsLast=true" in {
+      expectValidNec {
+        OrderBy.parse("id, name", nullsLast = true)
+      }.sql.get mustBe "id, name"
+    }
+
+    "mixed asc and desc" in {
+      expectValidNec {
+        OrderBy.parse("id, -name", nullsLast = true)
+      }.sql.get mustBe "id, name desc nulls last"
+    }
+  }
+
 }
