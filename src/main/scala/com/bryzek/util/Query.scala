@@ -160,7 +160,7 @@ case class Query(
           s"\\{${bp.name}}$c"
         }
         .foldLeft(s) { case (s, pattern) =>
-          s.replaceAll(pattern, bp.param.interpolationValue)
+          s.replaceAll(pattern, java.util.regex.Matcher.quoteReplacement(bp.param.interpolationValue))
         }
     }
   }

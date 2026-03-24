@@ -40,6 +40,7 @@ object Parameter {
       case i: String => TypeString(i)
       case i: Boolean => TypeBoolean(i)
       case i: JsValue => TypeJsValue(i)
+      case i: Array[Byte] => TypeBytes(i)
       case None => TypeUnit
       case Some(v) => from(v)
       case other => sys.error(s"Cannot convert instance of type[${other.getClass.getName}] to Parameter")
@@ -96,6 +97,11 @@ object Parameter {
     override def value: String = Json.stringify(original)
     override def interpolationValue: String = s"'$value'"
     override def cast: Option[String] = Some("json")
+  }
+  case class TypeBytes(override val original: Array[Byte]) extends Parameter[Array[Byte]] {
+    override def value: String = "\\x" + original.map(b => f"${b & 0xff}%02x").mkString
+    override def interpolationValue: String = s"'$value'"
+    override def cast: Option[String] = Some("bytea")
   }
   case object TypeUnit extends Parameter[Unit] {
     override val original: Unit = ()
