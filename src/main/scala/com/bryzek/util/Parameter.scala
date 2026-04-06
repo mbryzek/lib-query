@@ -43,6 +43,7 @@ object Parameter {
       case i: Array[Byte] => TypeBytes(i)
       case None => TypeUnit
       case Some(v) => from(v)
+      case i: Product => TypeString(i.toString)
       case other => sys.error(s"Cannot convert instance of type[${other.getClass.getName}] to Parameter")
     }
 
