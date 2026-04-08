@@ -65,7 +65,8 @@ case class Query(
   }
 
   private def maybeLogSyntaxError(ex: Throwable): Unit = {
-    if (ex.getMessage.contains("syntax error")) {
+    val msg = ex.getMessage
+    if (msg != null && msg.contains("syntax error")) {
       println(s"SQL Syntax Error. Query:\n${generateSql()}")
       ex.printStackTrace(System.err)
     }
