@@ -1,7 +1,7 @@
 package com.bryzek.util
 
 import org.joda.time.format.ISODateTimeFormat
-import org.joda.time.{DateTime, LocalDate}
+import org.joda.time.{DateTime, LocalDate, LocalTime}
 import play.api.libs.json.{JsValue, Json}
 
 import java.util.UUID
@@ -36,6 +36,7 @@ object Parameter {
       case i: Number => TypeNumber(i)
       case i: UUID => TypeUUID(i)
       case i: LocalDate => TypeLocalDate(i)
+      case i: LocalTime => TypeLocalTime(i)
       case i: DateTime => TypeDateTime(i)
       case i: String => TypeString(i)
       case i: Boolean => TypeBoolean(i)
@@ -78,6 +79,11 @@ object Parameter {
     override def value: String = ISODateTimeFormat.date().print(original)
     override def interpolationValue: String = s"'$value'"
     override def cast: Option[String] = Some("date")
+  }
+  case class TypeLocalTime(override val original: LocalTime) extends Parameter[LocalTime] {
+    override def value: String = original.toString("HH:mm:ss.SSS")
+    override def interpolationValue: String = s"'$value'"
+    override def cast: Option[String] = Some("time")
   }
   case class TypeDateTime(override val original: DateTime) extends Parameter[DateTime] {
     override def value: String = ISODateTimeFormat.dateTime().print(original)
