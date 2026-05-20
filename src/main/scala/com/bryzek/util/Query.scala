@@ -1,7 +1,6 @@
 package com.bryzek.util
 
-import anorm.{NamedParameter, ResultSetParser, Row, SQL, SimpleSql, on}
-import com.bryzek.util.Parameter.TypeUnit
+import anorm.{ResultSetParser, Row, SQL, SimpleSql, on}
 
 import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
@@ -73,12 +72,7 @@ case class Query(
   }
 
   def anormSql(): SimpleSql[Row] = {
-    SQL(sql()).on(allBindings.map { b =>
-      b.param match {
-        case TypeUnit => NamedParameter(b.name, Option.empty[String])
-        case _ => NamedParameter(b.name, b.param.value)
-      }
-    }*)
+    SQL(sql()).on(allBindings.map(b => b.param.toNamedParameter(b.name))*)
   }
 
   private def allBindings: Seq[BoundParameter] = {

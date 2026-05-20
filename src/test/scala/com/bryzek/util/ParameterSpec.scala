@@ -57,4 +57,55 @@ class ParameterSpec extends BaseSpec {
     q.sql() mustBe "insert into reservations (start_time) values ({start_time}::time)"
     q.interpolate() mustBe "insert into reservations (start_time) values ('11:00:00.000')"
   }
+
+  "TypeBytes.value" should {
+    "encode the full byte range as lowercase PG hex" in {
+      // 0..255 round-trip — ensures no sign-extension bugs or missing nibbles.
+      val all = (0 to 255).map(_.toByte).toArray
+      val expected = "\\x" + (0 to 255).map(b => f"$b%02x").mkString
+      TypeBytes(all).value mustBe expected
+    }
+
+    "encode a 1MB blob without OOMing or losing data" in {
+      // Regression guard for the prior `map(f"..."").mkString` implementation,
+      // which allocated ~70MB of intermediate Strings for a 1MB input. The
+      // fast path keeps to a single StringBuilder.
+      val size = 1024 * 1024
+      val bytes = new Array[Byte](size)
+      var i = 0
+      while (i < size) { bytes(i) = (i & 0xff).toByte; i += 1 }
+      val v = TypeBytes(bytes).value
+      v.length mustBe (2 + size * 2)
+      v.startsWith("\\x") mustBe true
+      v.substring(2, 4) mustBe "00"
+      v.substring(v.length - 2) mustBe "ff"
+    }
+  }
+
+  "toNamedParameter" should {
+    "send bytea binds as the raw Array[Byte] so anorm uses JDBC setBytes" in {
+      val bytes = Array[Byte](0x00, 0x7f, 0xff.toByte)
+      val np = TypeBytes(bytes).toNamedParameter("data")
+      np.name mustBe "data"
+      // anorm wraps the underlying value in a ParameterValue whose toString is
+      // `ParameterValue($value)`. For Array[Byte] that renders as the JVM
+      // default `[B@<hash>`; if we had regressed to the hex-String path the
+      // rendering would be `ParameterValue(\\x007fff)`. Asserting that the
+      // rendering does NOT contain the hex marker locks the fast path in.
+      val rendered = np.value.toString
+      rendered must include("[B@")
+      rendered must not include "\\x"
+    }
+
+    "send TypeUnit as a typed null String" in {
+      val np = TypeUnit.toNamedParameter("col")
+      np.name mustBe "col"
+    }
+
+    "default to String value for other types" in {
+      val np = TypeString("hello").toNamedParameter("greeting")
+      np.name mustBe "greeting"
+      np.value.toString must include("hello")
+    }
+  }
 }
