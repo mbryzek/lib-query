@@ -6,7 +6,6 @@ version := "0.1.26"
 
 ThisBuild / javacOptions ++= Seq("-source", "17", "-target", "17")
 
-ThisBuild / organization := "com.bryzek"
 ThisBuild / homepage := Some(url("https://github.com/mbryzek/lib-query"))
 ThisBuild / licenses := Seq("MIT" -> url("https://github.com/mbryzek/lib-query/blob/main/LICENSE"))
 ThisBuild / developers := List(
@@ -16,9 +15,7 @@ ThisBuild / scmInfo := Some(
   ScmInfo(url("https://github.com/mbryzek/lib-query"), "scm:git@github.com:mbryzek/lib-query.git")
 )
 
-ThisBuild / publishTo := sonatypePublishToBundle.value
-ThisBuild / sonatypeCredentialHost := "central.sonatype.com"
-ThisBuild / sonatypeRepository := "https://central.sonatype.com/api/v1/publisher"
+// NOTE: sbt-sonatype has no final sbt 2.x build; publish settings disabled for the sbt 2 pilot
 ThisBuild / publishMavenStyle := true
 
 ThisBuild / scalaVersion := "3.8.4"
