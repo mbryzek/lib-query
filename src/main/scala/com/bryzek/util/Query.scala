@@ -268,11 +268,7 @@ case class Query(
       // matches nothing
       and(default)
     } else {
-      val (q: Query, params: Seq[BoundParameter]) = values.foldLeft((this, List.empty[BoundParameter])) {
-        case ((q, names), v) =>
-          val (newQ, param) = q.bindVar(column, v)
-          (newQ, names :+ param)
-      }
+      val (q, params) = bindAll(values.map(v => column -> v))
       q.withFilter(
         QueryFilter(
           s"$column $op (${params.map(_.bindFragment).mkString(", ")})"
@@ -428,6 +424,29 @@ case class Query(
     }
   }
 
+  /** Binds every (column name, value) pair in a single pass, allocating the same bind-variable names `bindVar` would
+    * (`name`, `name_2`, `name_3`, ...) without rescanning `bindings` per value. `bindVar` in a fold is quadratic in the
+    * number of already-bound variables and cubic in the size of an `in` list -- a 10k-id `in` clause took ~6 MINUTES of
+    * CPU to build before this existed (platform's admin insight rollup passes one id per club).
+    */
+  private def bindAll(entries: Seq[(String, Any)]): (Query, Seq[BoundParameter]) = {
+    val (_, _, params) =
+      entries.foldLeft((bindings.map(_.name).toSet, Map.empty[String, Int], Vector.empty[BoundParameter])) {
+        case ((taken, nextCounts, acc), (rawName, value)) =>
+          val base = bindVarName(rawName)
+
+          @tailrec
+          def allocate(count: Int): (String, Int) = {
+            val candidate = if (count == 1) base else s"${base}_$count"
+            if (taken.contains(candidate)) allocate(count + 1) else (candidate, count)
+          }
+
+          val (name, count) = allocate(nextCounts.getOrElse(base, 1))
+          (taken + name, nextCounts + (base -> (count + 1)), acc :+ BoundParameter(name, Parameter.from(value)))
+      }
+    (this.copy(bindings = bindings ++ params), params)
+  }
+
   private def withFilter(filter: QueryFilter): Query = {
     withFilters(Seq(filter))
   }
@@ -452,11 +471,7 @@ case class Query(
       originalColumns.foreach(Sanitize.assertSafe)
       val columns = duplicate(originalColumns, values.length)
 
-      val (q: Query, params: Seq[BoundParameter]) =
-        values.zip(columns).foldLeft((this, List.empty[BoundParameter])) { case ((q, names), (v, n)) =>
-          val (newQ, param) = q.bindVar(n, v)
-          (newQ, names :+ param)
-        }
+      val (q, params) = bindAll(values.zip(columns).map { case (v, n) => n -> v })
 
       val paramString = params
         .grouped(originalColumns.length)
