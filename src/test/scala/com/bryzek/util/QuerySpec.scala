@@ -134,6 +134,26 @@ class QuerySpec extends BaseSpec {
       q.sql() mustBe "select 1 from users where users.id in (select user_id from emails)"
       q.interpolate() mustBe "select 1 from users where users.id in (select user_id from emails)"
     }
+
+    "skips bind names already taken" in {
+      val q = Query("select 1 from users").bind("id_2", "x").in("id", Seq("a", "b"))
+      q.sql() mustBe "select 1 from users where id in ({id}, {id_3})"
+      q.interpolate() mustBe "select 1 from users where id in ('a', 'b')"
+    }
+
+    // A large list must bind in linear time: naming each value by rescanning the
+    // already-bound variables made a 10k-id `in` clause take minutes of CPU.
+    "large list binds every value, quickly" in {
+      val values = (1 to 10000).map(i => s"club-$i")
+      val start = System.nanoTime()
+      val q = Query("select 1 from clubs").in("clubs.id", values)
+      val elapsedMs = (System.nanoTime() - start) / 1000000
+
+      q.bindings.map(_.name).distinct.size mustBe values.size
+      q.sql() must startWith("select 1 from clubs where clubs.id in ({clubs.id}, {clubs.id_2}, {clubs.id_3},")
+      q.sql() must endWith("{clubs.id_10000})")
+      elapsedMs must be < 2000L
+    }
   }
 
   "optionalIn" must {
