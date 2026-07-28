@@ -1,6 +1,6 @@
 package com.bryzek.util
 
-import anorm.{ResultSetParser, Row, SQL, SimpleSql, on}
+import anorm.{ResultSetParser, Row, SQL, SimpleSql}
 
 import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
