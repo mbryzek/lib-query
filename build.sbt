@@ -41,8 +41,9 @@ lazy val root = project
     testOptions += Tests.Argument("-oDF"),
     scalacOptions ++= allScalacOptions,
     libraryDependencies ++= Seq(
-      "org.playframework.anorm" %% "anorm-postgres" % "2.7.0",
+      "org.playframework.anorm" %% "anorm-postgres" % "3.1.0",
       "org.typelevel" %% "cats-core" % "2.13.0",
-      "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.1" % Test,
+      "joda-time" % "joda-time" % "2.14.0",
+      "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test,
     ),
   )
