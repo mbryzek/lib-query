@@ -43,7 +43,7 @@ lazy val root = project
     libraryDependencies ++= Seq(
       "org.playframework.anorm" %% "anorm-postgres" % "3.1.0",
       "org.typelevel" %% "cats-core" % "2.13.0",
-      "joda-time" % "joda-time" % "2.14.0",
+      "joda-time" % "joda-time" % "2.14.3",
       "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test,
     ),
   )
