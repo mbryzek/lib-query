@@ -384,6 +384,25 @@ class QuerySpec extends BaseSpec {
       q.interpolate() mustBe "select 1 from users where id = 'a' and id in (select id from tmp where id = 'foo')"
     }
 
+    // A subquery's own filters may carry comments, and a comment runs to the end of its line. If
+    // the closing paren is appended straight onto that line it is inside the comment and Postgres
+    // rejects the whole statement with "syntax error at end of input". The subquery that most
+    // often carries a comment is `matchNoRows`, so the statement that breaks is exactly the one
+    // that was supposed to safely return nothing.
+    "subquery whose last filter carries a comment still closes its paren" in {
+      val q = Query("select 1 from payments").in(
+        "invoice_id",
+        Query("select id from invoices").matchNoRows(comment = Some("not authorized"))
+      )
+      q.sql() mustBe "select 1 from payments where invoice_id in (select id from invoices\n where false -- not authorized\n)"
+      q.sql() must endWith(")")
+    }
+
+    "a comment-free subquery closes on the same line" in {
+      val q = Query("select 1 from users").in("id", Query("select id from tmp").equals("tmp_id", "foo"))
+      q.sql() must not include "\n)"
+    }
+
     "subquery has statically declared bind variable" in {
       val q = Query("select 1 from users")
         .equals("id", "a")
@@ -583,6 +602,15 @@ class QuerySpec extends BaseSpec {
         .unionAll(Query("select id from admins").in("admin_status", Seq("enabled", "disabled")))
       q.sql() mustBe "select id from users where user_status in ({user_status}, {user_status_2}) UNION ALL select id from admins where admin_status in ({admin_status}, {admin_status_2})"
       q.interpolate() mustBe "select id from users where user_status in ('active', 'pending') UNION ALL select id from admins where admin_status in ('enabled', 'disabled')"
+    }
+
+    // Same failure mode as the subquery case: a comment on the left-hand query would otherwise
+    // swallow the `UNION ALL` that follows it, silently turning two queries into one.
+    "a commented left-hand query does not swallow the union keyword" in {
+      val q = Query("select id from users")
+        .matchNoRows(comment = Some("not authorized"))
+        .unionAll(Query("select id from admins"))
+      q.sql() mustBe "select id from users\n where false -- not authorized\n UNION ALL select id from admins"
     }
 
     "multiple unions" in {
