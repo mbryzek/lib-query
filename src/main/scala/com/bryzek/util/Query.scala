@@ -111,7 +111,7 @@ case class Query(
     }
 
     val withUnions = unions.foldLeft(mainQuery) { case (sql, (unionType, query)) =>
-      s"$sql $unionType ${query.generateSql()}"
+      s"${Query.embeddable(sql)} $unionType ${query.generateSql()}"
     }
 
     Seq(
@@ -258,7 +258,7 @@ case class Query(
       }
 
     q.withFilter(
-      QueryFilter(s"$name $op ($sql)")
+      QueryFilter(s"$name $op (${Query.embeddable(sql)})")
     )
   }
 
@@ -487,4 +487,22 @@ case class Query(
     }
   }
 
+}
+
+object Query {
+
+  /** Makes generated SQL safe to embed inside a larger statement.
+    *
+    * A filter comment renders as `-- reason` and runs to the end of its line, and `generateSqlFilters` trims the
+    * trailing whitespace that used to terminate it. Standing alone that is fine. Embedded, whatever the caller appends
+    * lands *inside* the comment: a subquery loses its closing paren ("syntax error at end of input"), a union loses its
+    * `union all`. The predicate that produced the comment is usually `false`, so the statement that fails is precisely
+    * the one that was about to correctly return nothing.
+    *
+    * Appending a newline is valid SQL whether or not a comment is present, so this errs toward adding one -- a `--`
+    * inside a string literal costs a harmless line break.
+    */
+  private[util] def embeddable(sql: String): String = {
+    if (sql.contains("--")) s"$sql\n" else sql
+  }
 }
