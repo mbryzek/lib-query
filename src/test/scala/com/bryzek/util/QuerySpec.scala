@@ -534,6 +534,37 @@ class QuerySpec extends BaseSpec {
     q.interpolate() mustBe "select email, count(*) from users group by email having count(*)>1"
   }
 
+  // Same failure mode as the subquery and union cases: a filter comment runs to the end of its
+  // line, so any clause appended after it is swallowed. `group by` is the loud one -- the columns
+  // disappear while the aggregate stays, and Postgres rejects the statement the caller expected to
+  // return nothing. `order by`/`limit` are the quiet ones: they just stop applying.
+  "a commented filter" must {
+    "not swallow group by / having" in {
+      val q = Query("select email, count(*) from users")
+        .matchNoRows(comment = Some("not authorized"))
+        .groupBy("email")
+        .having("count(*)>1")
+      q.sql() mustBe "select email, count(*) from users\n where false -- not authorized\n group by email having count(*)>1"
+    }
+
+    "not swallow order by / limit / offset" in {
+      val q = Query("select id from users")
+        .matchNoRows(comment = Some("not authorized"))
+        .orderBy("id")
+        .limit(10)
+        .offset(5)
+      q.sql() mustBe "select id from users\n where false -- not authorized\n order by id limit 10 offset 5"
+    }
+
+    "leave an earlier comment alone -- its own line break already terminates it" in {
+      val q = Query("select id from users")
+        .matchNoRows(comment = Some("not authorized"))
+        .and("deleted_at is null")
+        .groupBy("id")
+      q.sql() mustBe "select id from users\n where false -- not authorized\n and deleted_at is null group by id"
+    }
+  }
+
   "union" must {
     "simple" in {
       val q = Query("select id from users").union(Query("select id from admins"))
