@@ -99,31 +99,27 @@ case class Query(
   }
 
   private def generateSql(): String = {
-    val mainQuery = Seq(
-      Some(baseQuery),
-      generateSqlFilters(),
-      groupBy.map { v => s"group by $v" },
-      having.map { v => s"having $v" }
-    ).flatten.foldLeft("") { case (acc, part) =>
-      if (acc.isEmpty) part
-      else if (part.startsWith("\n")) acc + part
-      else acc + " " + part
-    }
+    val mainQuery = Query.joinClauses(
+      Seq(
+        Some(baseQuery),
+        generateSqlFilters(),
+        groupBy.map { v => s"group by $v" },
+        having.map { v => s"having $v" }
+      ).flatten
+    )
 
     val withUnions = unions.foldLeft(mainQuery) { case (sql, (unionType, query)) =>
-      s"${Query.embeddable(sql)} $unionType ${query.generateSql()}"
+      Query.appendClause(sql, s"$unionType ${query.generateSql()}")
     }
 
-    Seq(
-      Some(withUnions),
-      orderBy.map { v => s"order by $v" },
-      limit.map { v => s"limit $v" },
-      offset.map { v => s"offset $v" }
-    ).flatten.foldLeft("") { case (acc, part) =>
-      if (acc.isEmpty) part
-      else if (part.startsWith("\n")) acc + part
-      else acc + " " + part
-    }
+    Query.joinClauses(
+      Seq(
+        Some(withUnions),
+        orderBy.map { v => s"order by $v" },
+        limit.map { v => s"limit $v" },
+        offset.map { v => s"offset $v" }
+      ).flatten
+    )
   }
 
   private def generateSqlFilters(): Option[String] = {
@@ -491,18 +487,52 @@ case class Query(
 
 object Query {
 
-  /** Makes generated SQL safe to embed inside a larger statement.
+  /** True when the last line of `sql` opens a `--` comment, i.e. anything appended without a line break first would
+    * land inside that comment rather than in the statement.
     *
     * A filter comment renders as `-- reason` and runs to the end of its line, and `generateSqlFilters` trims the
-    * trailing whitespace that used to terminate it. Standing alone that is fine. Embedded, whatever the caller appends
-    * lands *inside* the comment: a subquery loses its closing paren ("syntax error at end of input"), a union loses its
-    * `union all`. The predicate that produced the comment is usually `false`, so the statement that fails is precisely
-    * the one that was about to correctly return nothing.
+    * trailing whitespace that used to terminate it. The predicate that produced the comment is usually `false`, so the
+    * statement that gets mangled is precisely the one that was about to correctly return nothing -- which is why every
+    * append site below goes through [[appendClause]] or [[embeddable]] rather than concatenating directly.
+    *
+    * This only reads the final line: a `--` earlier in the statement is already terminated by its own line break.
+    */
+  private def endsInLineComment(sql: String): Boolean = {
+    sql.substring(sql.lastIndexOf('\n') + 1).contains("--")
+  }
+
+  /** Appends one clause (`group by`, `having`, `order by`, `limit`, `offset`, a union) to a statement, breaking the
+    * line first when the statement ends inside a comment.
+    *
+    * Without the break the clause is swallowed whole. `group by` is the expensive case: the columns vanish but the
+    * aggregate does not, so Postgres rejects the statement ("column must appear in the GROUP BY clause") instead of
+    * returning no rows. `order by`/`limit` are quieter and worse -- they silently stop applying.
+    */
+  private[util] def appendClause(sql: String, clause: String): String = {
+    if (sql.isEmpty) {
+      clause
+    } else if (clause.startsWith("\n")) {
+      sql + clause
+    } else if (endsInLineComment(sql)) {
+      s"$sql\n $clause"
+    } else {
+      s"$sql $clause"
+    }
+  }
+
+  private def joinClauses(parts: Seq[String]): String = {
+    parts.foldLeft("") { case (acc, part) => appendClause(acc, part) }
+  }
+
+  /** Makes generated SQL safe to embed inside a larger statement.
+    *
+    * Same hazard as [[appendClause]], one level out: embedded, whatever the caller wraps around the statement lands
+    * inside a trailing comment -- a subquery loses its closing paren ("syntax error at end of input").
     *
     * Appending a newline is valid SQL whether or not a comment is present, so this errs toward adding one -- a `--`
-    * inside a string literal costs a harmless line break.
+    * inside a string literal on the last line costs a harmless line break.
     */
   private[util] def embeddable(sql: String): String = {
-    if (sql.contains("--")) s"$sql\n" else sql
+    if (endsInLineComment(sql)) s"$sql\n" else sql
   }
 }
