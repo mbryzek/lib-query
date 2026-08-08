@@ -207,14 +207,14 @@ class QuerySpec extends BaseSpec {
   "in2" must {
     "simple" in {
       val q = Query("select 1 from users").in2(("users.id", "users.name"), Seq(("a", "mike")))
-      q.sql() mustBe "select 1 from users where (users.id, users.name) in (({users.id}, {users.name}))"
-      q.interpolate() mustBe "select 1 from users where (users.id, users.name) in (('a', 'mike'))"
+      q.sql() mustBe "select 1 from users where (users.id, users.name) in (values ({users.id}, {users.name}))"
+      q.interpolate() mustBe "select 1 from users where (users.id, users.name) in (values ('a', 'mike'))"
     }
 
     "same column name" in {
       val q = Query("select 1 from users").in2(("id", "id"), Seq(("a", "mike")))
-      q.sql() mustBe "select 1 from users where (id, id) in (({id}, {id_2}))"
-      q.interpolate() mustBe "select 1 from users where (id, id) in (('a', 'mike'))"
+      q.sql() mustBe "select 1 from users where (id, id) in (values ({id}, {id_2}))"
+      q.interpolate() mustBe "select 1 from users where (id, id) in (values ('a', 'mike'))"
     }
 
     "multipleValues" in {
@@ -225,16 +225,16 @@ class QuerySpec extends BaseSpec {
           ("b", "lisa")
         )
       )
-      q.sql() mustBe "select 1 from users where (id, name) in (({id}, {name}), ({id_2}, {name_2}))"
-      q.interpolate() mustBe "select 1 from users where (id, name) in (('a', 'mike'), ('b', 'lisa'))"
+      q.sql() mustBe "select 1 from users where (id, name) in (values ({id}, {name}), ({id_2}, {name_2}))"
+      q.interpolate() mustBe "select 1 from users where (id, name) in (values ('a', 'mike'), ('b', 'lisa'))"
     }
   }
 
   "optionalIn2" must {
     "defined" in {
       val q = Query("select 1 from users").optionalIn2(("id", "name"), Some(Seq(("a", "mike"))))
-      q.sql() mustBe "select 1 from users where (id, name) in (({id}, {name}))"
-      q.interpolate() mustBe "select 1 from users where (id, name) in (('a', 'mike'))"
+      q.sql() mustBe "select 1 from users where (id, name) in (values ({id}, {name}))"
+      q.interpolate() mustBe "select 1 from users where (id, name) in (values ('a', 'mike'))"
     }
 
     "empty" in {
@@ -250,25 +250,72 @@ class QuerySpec extends BaseSpec {
     }
   }
 
+  /** Every multi-column in clause must render as a `values` subquery, never as a bare row list. Postgres expands a bare
+    * row list into one or-branch per tuple and plans that QUADRATICALLY -- 3068ms of planning at 5000 tuples against a
+    * unique index covering the predicate exactly, versus flat sub-millisecond planning for the `values` form (see
+    * `bindInList`). Nothing in a generated DAO chooses this shape, so a regression here is invisible until a query stat
+    * says a prefilter cost an hour of database time, which is how ISS-1039 was found.
+    *
+    * Pinned across all four arities and at more than one tuple, because the or-expansion this guards against only bites
+    * once there is more than one.
+    */
+  "multi-column in clauses render as a values subquery at every arity" must {
+    "in2" in {
+      Query("select 1 from t")
+        .in2(("a", "b"), Seq(("a1", "b1"), ("a2", "b2")))
+        .interpolate() mustBe "select 1 from t where (a, b) in (values ('a1', 'b1'), ('a2', 'b2'))"
+    }
+
+    "in3" in {
+      Query("select 1 from t")
+        .in3(("a", "b", "c"), Seq(("a1", "b1", "c1"), ("a2", "b2", "c2")))
+        .interpolate() mustBe "select 1 from t where (a, b, c) in (values ('a1', 'b1', 'c1'), ('a2', 'b2', 'c2'))"
+    }
+
+    "in4" in {
+      Query("select 1 from t")
+        .in4(("a", "b", "c", "d"), Seq(("a1", "b1", "c1", "d1"), ("a2", "b2", "c2", "d2")))
+        .interpolate() mustBe
+        "select 1 from t where (a, b, c, d) in (values ('a1', 'b1', 'c1', 'd1'), ('a2', 'b2', 'c2', 'd2'))"
+    }
+
+    "in5" in {
+      Query("select 1 from t")
+        .in5(("a", "b", "c", "d", "e"), Seq(("a1", "b1", "c1", "d1", "e1"), ("a2", "b2", "c2", "d2", "e2")))
+        .interpolate() mustBe
+        "select 1 from t where (a, b, c, d, e) in " +
+        "(values ('a1', 'b1', 'c1', 'd1', 'e1'), ('a2', 'b2', 'c2', 'd2', 'e2'))"
+    }
+
+    /** The single-column in clause is deliberately NOT a values subquery: Postgres turns `x in (..)` into
+      * `x = any(array)`, which is already linear, so wrapping it would add a subquery for nothing.
+      */
+    "but the single-column in clause stays a plain list" in {
+      Query("select 1 from t")
+        .in("a", Seq("a1", "a2"))
+        .interpolate() mustBe "select 1 from t where a in ('a1', 'a2')"
+    }
+  }
+
   "in3" must {
     "simple" in {
       val q = Query("select 1 from users").in3(("id", "name", "last"), Seq(("a", "mike", "bryzek")))
-      q.sql() mustBe "select 1 from users where (id, name, last) in (({id}, {name}, {last}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, last) in (('a', 'mike', 'bryzek'))"
+      q.sql() mustBe "select 1 from users where (id, name, last) in (values ({id}, {name}, {last}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last) in (values ('a', 'mike', 'bryzek'))"
     }
 
     "same column name" in {
       val q = Query("select 1 from users").in3(("id", "name", "name"), Seq(("a", "mike", "bryzek")))
-      q.sql() mustBe "select 1 from users where (id, name, name) in (({id}, {name}, {name_2}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, name) in (('a', 'mike', 'bryzek'))"
+      q.sql() mustBe "select 1 from users where (id, name, name) in (values ({id}, {name}, {name_2}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, name) in (values ('a', 'mike', 'bryzek'))"
     }
   }
 
   "optionalIn3" must {
     "defined" in {
       val q = Query("select 1 from users").optionalIn3(("id", "name", "last"), Some(Seq(("a", "mike", "bryzek"))))
-      q.sql() mustBe "select 1 from users where (id, name, last) in (({id}, {name}, {last}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, last) in (('a', 'mike', 'bryzek'))"
+      q.sql() mustBe "select 1 from users where (id, name, last) in (values ({id}, {name}, {last}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last) in (values ('a', 'mike', 'bryzek'))"
     }
 
     "empty" in {
@@ -287,14 +334,14 @@ class QuerySpec extends BaseSpec {
   "in4" must {
     "simple" in {
       val q = Query("select 1 from users").in4(("id", "name", "last", "middle"), Seq(("a", "mike", "bryzek", "maciej")))
-      q.sql() mustBe "select 1 from users where (id, name, last, middle) in (({id}, {name}, {last}, {middle}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, last, middle) in (('a', 'mike', 'bryzek', 'maciej'))"
+      q.sql() mustBe "select 1 from users where (id, name, last, middle) in (values ({id}, {name}, {last}, {middle}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last, middle) in (values ('a', 'mike', 'bryzek', 'maciej'))"
     }
 
     "same column name" in {
       val q = Query("select 1 from users").in4(("id", "name", "name", "name"), Seq(("a", "mike", "bryzek", "c")))
-      q.sql() mustBe "select 1 from users where (id, name, name, name) in (({id}, {name}, {name_2}, {name_3}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, name, name) in (('a', 'mike', 'bryzek', 'c'))"
+      q.sql() mustBe "select 1 from users where (id, name, name, name) in (values ({id}, {name}, {name_2}, {name_3}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, name, name) in (values ('a', 'mike', 'bryzek', 'c'))"
     }
   }
 
@@ -304,8 +351,8 @@ class QuerySpec extends BaseSpec {
         ("id", "name", "last", "middle"),
         Some(Seq(("a", "mike", "bryzek", "maciej")))
       )
-      q.sql() mustBe "select 1 from users where (id, name, last, middle) in (({id}, {name}, {last}, {middle}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, last, middle) in (('a', 'mike', 'bryzek', 'maciej'))"
+      q.sql() mustBe "select 1 from users where (id, name, last, middle) in (values ({id}, {name}, {last}, {middle}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last, middle) in (values ('a', 'mike', 'bryzek', 'maciej'))"
     }
 
     "empty" in {
@@ -327,8 +374,8 @@ class QuerySpec extends BaseSpec {
         ("id", "name", "last", "middle", "alias"),
         Seq(("a", "mike", "bryzek", "maciej", "foo"))
       )
-      q.sql() mustBe "select 1 from users where (id, name, last, middle, alias) in (({id}, {name}, {last}, {middle}, {alias}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, last, middle, alias) in (('a', 'mike', 'bryzek', 'maciej', 'foo'))"
+      q.sql() mustBe "select 1 from users where (id, name, last, middle, alias) in (values ({id}, {name}, {last}, {middle}, {alias}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last, middle, alias) in (values ('a', 'mike', 'bryzek', 'maciej', 'foo'))"
     }
 
     "same column name" in {
@@ -337,8 +384,8 @@ class QuerySpec extends BaseSpec {
           ("id", "name", "name", "name", "name"),
           Seq(("a", "mike", "bryzek", "c", "foo"))
         )
-      q.sql() mustBe "select 1 from users where (id, name, name, name, name) in (({id}, {name}, {name_2}, {name_3}, {name_4}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, name, name, name) in (('a', 'mike', 'bryzek', 'c', 'foo'))"
+      q.sql() mustBe "select 1 from users where (id, name, name, name, name) in (values ({id}, {name}, {name_2}, {name_3}, {name_4}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, name, name, name) in (values ('a', 'mike', 'bryzek', 'c', 'foo'))"
     }
   }
 
@@ -348,8 +395,8 @@ class QuerySpec extends BaseSpec {
         ("id", "name", "last", "middle", "alias"),
         Some(Seq(("a", "mike", "bryzek", "maciej", "foo")))
       )
-      q.sql() mustBe "select 1 from users where (id, name, last, middle, alias) in (({id}, {name}, {last}, {middle}, {alias}))"
-      q.interpolate() mustBe "select 1 from users where (id, name, last, middle, alias) in (('a', 'mike', 'bryzek', 'maciej', 'foo'))"
+      q.sql() mustBe "select 1 from users where (id, name, last, middle, alias) in (values ({id}, {name}, {last}, {middle}, {alias}))"
+      q.interpolate() mustBe "select 1 from users where (id, name, last, middle, alias) in (values ('a', 'mike', 'bryzek', 'maciej', 'foo'))"
     }
 
     "empty" in {

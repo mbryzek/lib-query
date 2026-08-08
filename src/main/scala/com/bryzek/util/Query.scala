@@ -460,6 +460,38 @@ case class Query(
     }
   }
 
+  /** The multi-column in clause behind [[in2]]..[[in5]], rendered as `(a, b) in (values (..), (..))` rather than as the
+    * bare row list `(a, b) in ((..), (..))`.
+    *
+    * The `values` is not decoration: Postgres rewrites a bare row-wise in list into an OR of one row comparison per
+    * tuple, and planning that OR is QUADRATIC in the number of tuples. Measured on 3M rows against the unique index the
+    * predicate covers exactly:
+    *
+    * {{{
+    *   tuples    in (list)                   in (values ...)
+    *      100    4.9ms plan + 1.7ms exec     0.11ms plan + 0.37ms exec
+    *     1000    123ms plan +  10ms exec     0.94ms plan +  9.7ms exec
+    *     5000   3068ms plan + 106ms exec
+    * }}}
+    *
+    * As a `values` subquery it is one semi-join instead of N or-branches, so planning is flat and the plan is a nested
+    * loop over the same index. Execution never got worse at any size tested, and the row estimate is better (the
+    * or-form estimated 2 rows where 100 matched, which misleads anything joined above it).
+    *
+    * This is a filter fragment, so a `values` subquery is the whole of what is reachable here -- a `join unnest(...)`
+    * benchmarks about the same but cannot be expressed in a where clause, and would need per-column SQL types this
+    * layer does not have.
+    *
+    * Semantics are unchanged: `in` is a semi-join either way, so duplicate tuples still yield one row, and the bind
+    * parameters and their order are identical. Single-tuple callers are not special-cased -- Postgres plans
+    * `in (values (a, b, c))` as a plain index scan.
+    *
+    * Found via ISS-1039: the revenue-entry upsert prefilter spent ~93 minutes of database time over two days, nearly
+    * all of it planning 100-tuple in lists.
+    *
+    * The single-column [[buildIn]] above is NOT affected and is left alone -- Postgres turns that one into
+    * `= any(array)`, which is already linear.
+    */
   private def bindInList(originalColumns: Seq[String], values: Seq[Any]): Query = {
     if (values.isEmpty) {
       matchNoRows(comment = Some(s"in clause specified for columns ${originalColumns.mkString(", ")} with no values"))
@@ -478,7 +510,7 @@ case class Query(
         .mkString(", ")
 
       q.withFilter(
-        QueryFilter(s"(${originalColumns.mkString(", ")}) in ($paramString)")
+        QueryFilter(s"(${originalColumns.mkString(", ")}) in (values $paramString)")
       )
     }
   }
