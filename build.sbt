@@ -46,13 +46,13 @@ lazy val root = project
     // reported as slow.
     testOptions ++= Seq(
       Tests.Argument("-oDF"),
-      Tests.Argument(TestFrameworks.ScalaTest, "-u", (target.value / "test-reports").getAbsolutePath),
+      Tests.Argument(TestFrameworks.ScalaTest, "-u", (target.value / "test-reports").getAbsolutePath)
     ),
     scalacOptions ++= allScalacOptions,
     libraryDependencies ++= Seq(
       "org.playframework.anorm" %% "anorm-postgres" % "3.1.0",
       "org.typelevel" %% "cats-core" % "2.13.0",
       "joda-time" % "joda-time" % "2.14.3",
-      "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test,
-    ),
+      "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test
+    )
   )
