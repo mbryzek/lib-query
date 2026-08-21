@@ -317,6 +317,54 @@ case class Query(
     )
   }
 
+  /** A SQL row-constructor comparison, `(c1, c2) > (v1, v2)` -- the bound a two-column keyset page
+    * resumes from.
+    *
+    * It is ONE operation rather than a pair of comparisons because Postgres treats the row form as
+    * a single index condition on an index leading `(c1, c2)`: a range starting immediately after
+    * the cursor row, which is what lets `limit` push down. The hand-written equivalent --
+    * `c1 > v1 or (c1 = v1 and c2 > v2)` -- is an OR the planner will not turn into that range, so
+    * it degrades to reading everything at or after `v1`.
+    *
+    * BOTH HALVES ARE BOUND HERE, not by the caller, and that is the point of the method. [[bind]]
+    * allocates the bind-variable name itself -- suffixing `_2`, `_3` when the name is already
+    * taken -- and hands back only the Query, so a caller composing this fragment has to read the
+    * appended binding back to learn which name it got. A name written out by hand points at
+    * somebody else's binding the first time one collides, silently, with nothing about the
+    * resulting SQL looking wrong.
+    *
+    * The fragments carry each parameter's cast (`::timestamptz` on a `DateTime`), which is what
+    * keeps the comparison an index condition rather than a coerced expression.
+    *
+    * A null bound is refused rather than rendered: `(c1, c2) > (null, v2)` evaluates to NULL, so it
+    * matches NO rows -- a keyset walk built on one stops at its first page and reports having
+    * reached the end.
+    */
+  def greaterThan2(columns: (String, String), values: (Any, Any)): Query = {
+    val (columnOne, columnTwo) = columns
+    Seq(columnOne, columnTwo).foreach(Sanitize.assertSafe)
+    val (q, params) = bindAll(
+      Seq(
+        columnOne -> assertNotNull(columnOne, values._1),
+        columnTwo -> assertNotNull(columnTwo, values._2)
+      )
+    )
+    q.withFilter(
+      QueryFilter(s"($columnOne, $columnTwo) > (${params.map(_.bindFragment).mkString(", ")})")
+    )
+  }
+
+  private def assertNotNull(column: String, value: Any): Any = {
+    value match {
+      case null | None =>
+        sys.error(
+          s"Row comparison on column[$column] was given no value. A row comparison against null " +
+            "matches no rows rather than every row, so it is refused here."
+        )
+      case v => v
+    }
+  }
+
   def in(name: String, subQuery: Query): Query = {
     subQueryFilter("in", name, subQuery)
   }

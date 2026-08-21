@@ -1,6 +1,7 @@
 package com.bryzek.util
 
 import helpers.BaseSpec
+import org.joda.time.{DateTime, DateTimeZone}
 
 import scala.util.{Failure, Success, Try}
 
@@ -463,6 +464,63 @@ class QuerySpec extends BaseSpec {
     val q = Query("select 1 from users").greaterThan("id", "1")
     q.sql() mustBe "select 1 from users where id > {id}"
     q.interpolate() mustBe "select 1 from users where id > '1'"
+  }
+
+  "greaterThan2" must {
+    val cursorUpdatedAt = new DateTime(2026, 8, 21, 13, 0, 0, DateTimeZone.UTC)
+
+    "renders a row comparison, not an or-expansion" in {
+      val q = Query("select 1 from reservations")
+        .greaterThan2(("reservations.updated_at", "reservations.id"), (cursorUpdatedAt, "abc"))
+      q.sql() mustBe "select 1 from reservations where (reservations.updated_at, reservations.id) > " +
+        "({reservations.updated_at}::timestamptz, {reservations.id})"
+      q.interpolate() mustBe "select 1 from reservations where (reservations.updated_at, reservations.id) > " +
+        "('2026-08-21T13:00:00.000Z', 'abc')"
+    }
+
+    /** The reason both halves are bound inside the method: a caller writing `{id}` by hand into the
+      * fragment would point at the binding `equals` already made, and the SQL would still read
+      * correctly.
+      */
+    "binds against a name already taken" in {
+      val q = Query("select 1 from reservations")
+        .equals("reservations.id", "already-bound")
+        .greaterThan2(("reservations.updated_at", "reservations.id"), (cursorUpdatedAt, "abc"))
+      q.sql() mustBe "select 1 from reservations where reservations.id = {reservations.id} and " +
+        "(reservations.updated_at, reservations.id) > ({reservations.updated_at}::timestamptz, {reservations.id_2})"
+      q.interpolate() mustBe "select 1 from reservations where reservations.id = 'already-bound' and " +
+        "(reservations.updated_at, reservations.id) > ('2026-08-21T13:00:00.000Z', 'abc')"
+    }
+
+    "same column name on both halves" in {
+      val q = Query("select 1 from users").greaterThan2(("id", "id"), ("a", "b"))
+      q.sql() mustBe "select 1 from users where (id, id) > ({id}, {id_2})"
+      q.interpolate() mustBe "select 1 from users where (id, id) > ('a', 'b')"
+    }
+
+    "refuses a null bound rather than matching no rows" in {
+      Seq[(Any, Any)](
+        (None, "abc"),
+        (cursorUpdatedAt, None),
+        (null, "abc")
+      ).foreach { values =>
+        Try {
+          Query("select 1 from users").greaterThan2(("updated_at", "id"), values)
+        } match {
+          case Success(q) => fail(s"Expected a null bound to be refused. Got: ${q.sql()}")
+          case Failure(ex) => ex.getMessage must include("matches no rows")
+        }
+      }
+    }
+
+    "rejects an unsafe column name" in {
+      Try {
+        Query("select 1 from users").greaterThan2(("updated_at", "id; drop table users"), ("a", "b"))
+      } match {
+        case Success(q) => fail(s"Expected an unsafe column name to be refused. Got: ${q.sql()}")
+        case Failure(ex) => ex.getMessage must include("unsafe characters")
+      }
+    }
   }
 
   "greaterThanOrEquals" in {
