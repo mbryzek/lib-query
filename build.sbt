@@ -1,6 +1,6 @@
 name := "lib-query"
 
-version := "0.1.44"
+version := "0.1.45"
 
 ThisBuild / javacOptions ++= Seq("-source", "17", "-target", "17")
 
