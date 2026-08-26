@@ -80,6 +80,37 @@ ThisBuild / dependencyOverrides ++= Seq(
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
 )
 
+// logback resolves in this build only through `scalatestplus-play % Test` -> play-test, which
+// declares logback-classic 1.5.18 -- inside the affected range of GHSA-25qh-j22f-pwp8, where
+// logback-core evaluates a conditional configuration element (`<if>`/`<then>`, compiled by Janino)
+// out of the configuration file it was handed, so whoever can write that file or set the
+// environment variable naming it chooses code the JVM then runs. Fixed in 1.5.19.
+//
+// BOTH COORDINATES, AT ONE VERSION, because logback publishes classic and core as one train:
+// classic subclasses core's appender, model and joran types, and its OSGi manifest imports
+// `ch.qos.logback.core` at `[1.5,2)` rather than at a floor. Overriding core alone therefore
+// resolves cleanly and breaks where a version conflict is hardest to read -- the first time a
+// logger is configured, as a NoSuchMethodError from inside logback. `LogbackPinSpec` drives an
+// event through the pair and reads the resolved core version back, so a partial pin or a deleted
+// override fails by name here rather than in a consumer.
+//
+// `dependencyOverrides` RATHER THAN A DECLARED DEPENDENCY, because neither this library nor its
+// suite calls logback: it is absent from the compile tree and so from the published POM, and an
+// override is what keeps it that way -- sbt writes no `dependencyOverrides` into the POM, so this
+// decides what this repo tests against and imposes nothing on a consumer. Declaring it instead
+// would publish a logback edge from a library that never loads it and put a floor under platform
+// and acumen, which take their binding from play-logback and pin it themselves.
+//
+// 1.5.34 rather than the advisory's own 1.5.19 floor: it is the assessed target, it carries no
+// open advisory of its own, and it stays on the 1.5 line that play-test 3.0.8 was built against,
+// so nothing else in the resolution moves.
+lazy val logbackVersion = "1.5.34"
+
+ThisBuild / dependencyOverrides ++= Seq(
+  "ch.qos.logback" % "logback-classic" % logbackVersion,
+  "ch.qos.logback" % "logback-core" % logbackVersion,
+)
+
 // Keep the unused browser-automation stack off the test classpath.
 //
 // It arrives by two transitive routes -- play-test -> io.fluentlenium:fluentlenium-core, and
