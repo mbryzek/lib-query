@@ -80,6 +80,31 @@ ThisBuild / dependencyOverrides ++= Seq(
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
 )
 
+// logback resolves at one version in this build, and logback-classic moves with logback-core.
+//
+// Neither coordinate is declared anywhere here: logback reaches this build only through the test
+// classpath, scalatestplus-play -> play-test -> logback-classic -> logback-core, so the version is
+// whatever that transitive happens to carry. logback-core below 1.5.34 lets the deserialization
+// modules its HardenedObjectInputStream is supposed to bound instantiate classes outside that
+// bound, which turns any path that reads a serialized logging event into an object-injection sink
+// (GHSA-jhq6-gfmj-v8fx).
+//
+// AN OVERRIDE, NOT A DECLARATION -- the opposite call from the postgresql pin below, and for the
+// opposite reason: that edge is compile scope and reaches every consumer through the published
+// POM, while this one is test scope, so no consumer resolves logback through this library at all
+// and a resolution-local fix is the whole fix.
+//
+// logback-classic is pinned alongside rather than left where the transitive put it. The two
+// publish as one release train and classic compiles against core's internals, so a classic paired
+// with a core it was not built against links fine and throws NoSuchMethodError or
+// AbstractMethodError on whichever appender path first touches a changed member.
+lazy val logbackVersion = "1.5.34"
+
+ThisBuild / dependencyOverrides ++= Seq(
+  "ch.qos.logback" % "logback-core" % logbackVersion,
+  "ch.qos.logback" % "logback-classic" % logbackVersion,
+)
+
 // Keep the unused browser-automation stack off the test classpath.
 //
 // It arrives by two transitive routes -- play-test -> io.fluentlenium:fluentlenium-core, and
