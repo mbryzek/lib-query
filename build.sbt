@@ -80,6 +80,33 @@ ThisBuild / dependencyOverrides ++= Seq(
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
 )
 
+// logback-classic and logback-core resolve to one version, at or above 1.5.33. Both reach this
+// build at test scope only, through scalatestplus-play -> play-test, which contributes 1.5.18.
+//
+// The floor is a security one. Through 1.5.32, logback-core's `HardenedObjectInputStream` -- the
+// deserializer behind `SimpleSocketServer` and `SimpleSSLSocketServer` -- decided what a
+// socket-delivered logging event may instantiate by PREFIX: a class name beginning `java.lang` or
+// `java.util` was admitted whatever class it actually named. From 1.5.33 the same decision is an
+// equality test against sixteen named classes, and everything else in those packages is refused
+// with `InvalidClassException` (GHSA-p47f-322f-whfh). `LogbackPinSpec` asks the class itself for
+// that refusal, because a pin that has stopped applying resolves cleanly and says nothing.
+//
+// THE PAIR MOVES TOGETHER, and bumping logback-core alone is the failure this states rather than
+// one it prevents: the fix changed `HardenedObjectInputStream`'s constructors to take a `Context`,
+// and logback-classic 1.5.32's `HardenedLoggingEventInputStream` calls the two-argument one its
+// superclass no longer has. That combination resolves cleanly and throws NoSuchMethodError at
+// class initialization.
+//
+// This governs THIS build's resolution only -- sbt writes no `dependencyOverrides` into the
+// published POM -- and both artifacts are test scope here, so it reaches no consumer and imposes no
+// floor on one. A consumer states its own.
+lazy val logbackVersion = "1.5.34"
+
+ThisBuild / dependencyOverrides ++= Seq(
+  "ch.qos.logback" % "logback-classic" % logbackVersion,
+  "ch.qos.logback" % "logback-core" % logbackVersion,
+)
+
 // Keep the unused browser-automation stack off the test classpath.
 //
 // It arrives by two transitive routes -- play-test -> io.fluentlenium:fluentlenium-core, and
