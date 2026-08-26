@@ -80,6 +80,39 @@ ThisBuild / dependencyOverrides ++= Seq(
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
 )
 
+// logback moves as a PAIR, and the version is a security floor.
+//
+// logback-core below 1.5.25 resolves an `<appender-ref>` out of the appender bag without ever
+// asking whether the configuration DECLARED an appender of that name (GHSA-qqpg-mvqg-649v). It is
+// an ACE against configuration processing -- an attacker who can write the configuration file gets
+// a class already on the class path instantiated -- but the part that shows on a healthy build is
+// quieter: a reference to a name that was never declared leaves the referring logger with NO
+// appenders at all, the declared ones beside it included, and records nothing about it. 1.5.25
+// adds the declaration check, so an undeclared reference is warned about and skipped and the
+// declared appenders beside it are still attached. `LogbackPinSpec` asserts that, because neither
+// half of it can be read off a version number.
+//
+// BOTH ARTIFACTS OR NEITHER: the check spans them. The guard and its analyser live in
+// logback-core, and logback-classic is what registers the analyser with the processor, so
+// logback-core alone at 1.5.25+ resolves and links and leaves the guard registered by nobody --
+// which is WORSE than not bumping, because the declared-appender set is then empty for the whole
+// configuration and every appender-ref is skipped, not just the undeclared ones. The pair are one
+// release train in general -- classic compiles against core's model/processor internals -- so a
+// split is not safe in either direction.
+//
+// It reaches this build ONLY through the test classpath: scalatestplus-play (Test) -> play-test ->
+// logback-classic -> logback-core. Nothing in `src/main` links against it.
+//
+// This governs THIS build's resolution only -- sbt writes no `dependencyOverrides` into the
+// published POM -- so it decides what this repo tests against and imposes no floor on a consumer.
+// A consumer states its own, as platform and acumen do.
+lazy val logbackVersion = "1.5.34"
+
+ThisBuild / dependencyOverrides ++= Seq(
+  "ch.qos.logback" % "logback-core" % logbackVersion,
+  "ch.qos.logback" % "logback-classic" % logbackVersion,
+)
+
 // Keep the unused browser-automation stack off the test classpath.
 //
 // It arrives by two transitive routes -- play-test -> io.fluentlenium:fluentlenium-core, and
