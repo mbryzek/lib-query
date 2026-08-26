@@ -118,6 +118,23 @@ lazy val root = project
     scalacOptions ++= allScalacOptions,
     libraryDependencies ++= Seq(
       "org.playframework.anorm" %% "anorm-postgres" % "3.1.0",
+      // The JDBC driver reaches this build only through anorm-postgres, which declares
+      // org.postgresql:postgresql 42.7.11 at compile scope -- inside the affected range of
+      // GHSA-j92g-9f8w-j867, where a channel-binding SCRAM handshake silently DOWNGRADES to one
+      // without channel binding when the server certificate uses a signature algorithm the driver
+      // cannot hash, so a connection that asked to be bound to the certificate is not, and says
+      // nothing. anorm-postgres 3.1.0 is its newest release, so there is no upstream version to
+      // move to and the driver has to be named here.
+      //
+      // DECLARED, NOT `dependencyOverrides`. An override is resolution-local: it fixes this
+      // build's classpath and writes nothing into the published POM, so every consumer would keep
+      // resolving 42.7.11 through the anorm-postgres edge and inherit the same advisory from a
+      // library that reads as fixed. A direct compile-scope dependency is what reaches them.
+      //
+      // 42.7.13 rather than the advisory's own 42.7.12 floor: both are out of range, and 42.7.13
+      // is what platform and acumen already pin, so the driver this library's tests resolve is the
+      // one its consumers actually run and the next dependency sweep has nothing to bump.
+      "org.postgresql" % "postgresql" % "42.7.13",
       "org.typelevel" %% "cats-core" % "2.13.0",
       "joda-time" % "joda-time" % "2.14.3",
       // org.lz4:lz4-java reaches the test classpath only here, transitively:
