@@ -80,7 +80,7 @@ ThisBuild / dependencyOverrides ++= Seq(
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
 )
 
-// logback moves as a PAIR, and the version is a security floor two advisories set.
+// logback moves as a PAIR, and the version is a security floor three advisories set.
 //
 // logback reaches this build ONLY through the test classpath: `scalatestplus-play % Test` ->
 // play-test, which declares logback-classic 1.5.18 -> logback-core. Nothing in `src/main` links
@@ -101,7 +101,15 @@ ThisBuild / dependencyOverrides ++= Seq(
 // declared appenders beside it are still attached. `LogbackPinSpec` asserts that, because neither
 // half of it can be read off a version number.
 //
-// BOTH COORDINATES, AT ONE VERSION, for two reasons that point the same way. The appender-ref check
+// The binding floor is higher still: through 1.5.32, logback-core's `HardenedObjectInputStream` --
+// the deserializer behind `SimpleSocketServer` and `SimpleSSLSocketServer` -- decided what a
+// socket-delivered logging event may instantiate by PREFIX, so a class name beginning `java.lang`
+// or `java.util` was admitted whatever class it actually named. From 1.5.33 the same decision is an
+// equality test against sixteen named classes, and everything else in those packages is refused
+// with `InvalidClassException` (GHSA-p47f-322f-whfh). `LogbackPinSpec` asks the class itself for
+// that refusal, because a pin that has stopped applying resolves cleanly and says nothing.
+//
+// BOTH COORDINATES, AT ONE VERSION, for three reasons that point the same way. The appender-ref check
 // spans the pair: the guard and its analyser live in logback-core, and logback-classic is what
 // registers the analyser with the processor, so logback-core alone at 1.5.25+ resolves and links
 // and leaves the guard registered by nobody -- which is WORSE than not bumping, because the
@@ -112,7 +120,11 @@ ThisBuild / dependencyOverrides ++= Seq(
 // resolves cleanly and breaks where a version conflict is hardest to read -- the first time a
 // logger is configured, as a NoSuchMethodError from inside logback. A split is not safe in either
 // direction; `LogbackPinSpec` drives an event through the pair and reads the resolved core version
-// back, so a partial pin or a deleted override fails by name here rather than in a consumer.
+// back, so a partial pin or a deleted override fails by name here rather than in a consumer. The
+// deserialization fix makes the same point concretely: it changed `HardenedObjectInputStream`'s
+// constructors to take a `Context`, and logback-classic 1.5.32's `HardenedLoggingEventInputStream`
+// calls the two-argument one its superclass no longer has, so logback-core alone at 1.5.33+
+// resolves cleanly and throws NoSuchMethodError at class initialization.
 //
 // `dependencyOverrides` RATHER THAN A DECLARED DEPENDENCY, because neither this library nor its
 // suite calls logback: it is absent from the compile tree and so from the published POM, and an
@@ -121,7 +133,8 @@ ThisBuild / dependencyOverrides ++= Seq(
 // would publish a logback edge from a library that never loads it and put a floor under platform
 // and acumen, which take their binding from play-logback and pin it themselves.
 //
-// 1.5.34 rather than either advisory's own floor: it is the assessed target, it carries no open
+// 1.5.34 rather than any of the three advisories' own floors: it is the assessed target, it is
+// above the highest of them (1.5.33, for the deserialization fix), it carries no open
 // advisory of its own, and it stays on the 1.5 line that play-test 3.0.8 was built against, so
 // nothing else in the resolution moves.
 lazy val logbackVersion = "1.5.34"

@@ -3,11 +3,14 @@ package com.bryzek.util
 import ch.qos.logback.classic.joran.JoranConfigurator
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.classic.{Level, LoggerContext}
+import ch.qos.logback.core.ContextBase
 import ch.qos.logback.core.CoreConstants
+import ch.qos.logback.core.net.HardenedObjectInputStream
 import ch.qos.logback.core.read.ListAppender
 import ch.qos.logback.core.status.Status
-import java.io.ByteArrayInputStream
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InvalidClassException, ObjectOutputStream}
 import java.nio.charset.StandardCharsets
+import java.util as ju
 import org.scalatest.matchers.must.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.slf4j.Logger.ROOT_LOGGER_NAME
@@ -49,6 +52,19 @@ import scala.jdk.CollectionConverters.*
   * nothing. The attachment assertion fails in that state; the warning one does not, because the
   * warning it looks for is exactly what a wrongly-skipped reference produces.
   *
+  * The third advisory is behaviour too. `HardenedObjectInputStream` is what logback deserializes a
+  * socket-delivered logging event through, and through 1.5.32 it decided what such an event may
+  * instantiate by PREFIX: a class name beginning `java.lang` or `java.util` was admitted whatever
+  * class it actually named, so anything able to reach a `SimpleSocketServer` or
+  * `SimpleSSLSocketServer` could choose freely from those two packages (GHSA-p47f-322f-whfh). From
+  * 1.5.33 the same decision is an equality test against sixteen named classes plus whatever
+  * whitelist the caller supplied. 1.5.33 is also where those constructors began taking a `Context`,
+  * so this file does not compile against an affected version at all and a slipped pin surfaces as a
+  * build error rather than as a red test. What the assertions add is that the class on the classpath
+  * BEHAVES as the fixed one rather than merely carrying its signature. Both are needed: a check that
+  * asked only for the refusal would pass just as well on a jar that had stopped deserializing
+  * anything at all.
+  *
   * Every context here is built rather than taken from SLF4J deliberately: the JVM's bound context
   * is shared with anything else this suite starts, and configuring that one resets it, detaching
   * and stopping every appender anything else in this test JVM has attached to it.
@@ -85,6 +101,27 @@ class LogbackPinSpec extends AnyWordSpec with Matchers {
     configurator.setContext(context)
     configurator.doConfigure(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)))
     context
+  }
+
+  private def serialized(value: Object): Array[Byte] = {
+    val bytes = new ByteArrayOutputStream()
+    val out = new ObjectOutputStream(bytes)
+    out.writeObject(value)
+    out.close()
+    bytes.toByteArray
+  }
+
+  /** Reads back with an EMPTY caller whitelist, so what the stream accepts is exactly logback's own
+    * built-in list and nothing else.
+    */
+  private def readHardened(value: Object): Object = {
+    val in = new HardenedObjectInputStream(
+      new ContextBase(),
+      new ByteArrayInputStream(serialized(value)),
+      new ju.ArrayList[String](),
+    )
+    try in.readObject()
+    finally in.close()
   }
 
   "the resolved logback pair" must {
@@ -138,6 +175,21 @@ class LogbackPinSpec extends AnyWordSpec with Matchers {
       val statuses = context.getStatusManager.getCopyOfStatusList.asScala.toList
       statuses.filter(_.getLevel == Status.ERROR).map(_.getMessage) mustBe Nil
       statuses.filter(_.getLevel == Status.WARN).map(_.getMessage).exists(_.contains("UNDECLARED")) mustBe true
+    }
+
+    "refuse a java.util class the hardened stream's allow-list does not name" in {
+      // `java.util.Date` is serializable and is not one of the sixteen. On an affected jar it is
+      // admitted by the `java.util` prefix alone and constructed from the stream.
+      val thrown = intercept[InvalidClassException] {
+        readHardened(new ju.Date(0L))
+      }
+      thrown.getMessage must include("java.util.Date")
+    }
+
+    "still read a class the hardened stream's allow-list does name" in {
+      val allowed = new ju.ArrayList[String]()
+      allowed.add("a")
+      readHardened(allowed) mustBe allowed
     }
   }
 }
