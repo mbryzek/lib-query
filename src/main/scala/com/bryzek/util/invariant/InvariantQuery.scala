@@ -28,12 +28,13 @@ case class Invariant(name: String, queryCount: Query) extends InvariantQuery {
 case class InvariantWithDetails(name: String, query: Query) extends InvariantQuery {
   override def withPrefix(prefix: String): InvariantQuery = this.copy(name = prefix + name)
   override def queryDetails: Option[Query] = Some(query)
-  override def queryCount: Query = {
-    Query(
-      s"""
-         |select count(*) from (${query.sql()}) q
-         |""".stripMargin,
-      bindings = query.bindings
-    )
-  }
+  // Built without a margin. `stripMargin` over an interpolated string strips the INTERPOLATED
+  // sql too, and a detail query whose own source used a margin has already been stripped once:
+  // a continuation line reading `| || ' x ' || y` comes back as `| ' x ' || y`, a bitwise-or
+  // against a string literal that Postgres has no operator for. The wrapper does not own this
+  // sql and must not re-strip it.
+  override def queryCount: Query = Query(
+    s"select count(*) from (${query.sql()}) q",
+    bindings = query.bindings
+  )
 }

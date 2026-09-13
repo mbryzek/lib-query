@@ -15,7 +15,26 @@ class InvariantQuerySpec extends BaseSpec {
 
   "InvariantWithDetails counts the rows its details select" in {
     details.queryDetails.map(_.sql()) mustBe Some(details.query.sql())
-    details.queryCount.sql().trim mustBe s"select count(*) from (${details.query.sql()}) q"
+    details.queryCount.sql() mustBe s"select count(*) from (${details.query.sql()}) q"
+  }
+
+  // The wrapper does not own the detail query's sql, and a caller that wrote its own with a
+  // margin has already stripped it. Re-stripping eats the leading `|` of a `||` continuation
+  // and renders `| 'x'` -- a bitwise-or against a string literal Postgres has no operator for.
+  "InvariantWithDetails leaves a detail query's own margin-stripped sql alone" in {
+    val concatenated = InvariantWithDetails(
+      "leading_concatenation",
+      Query(
+        """select u.id
+          | || ' name ' || u.name
+          | || ' status ' || u.status from users u""".stripMargin
+      )
+    )
+
+    concatenated.query.sql() must include(" || ' name ' || u.name")
+    concatenated.queryCount.sql() must include(" || ' name ' || u.name")
+    concatenated.queryCount.sql() must not(include("\n| ' name '"))
+    concatenated.queryCount.sql() mustBe s"select count(*) from (${concatenated.query.sql()}) q"
   }
 
   "InvariantWithDetails carries the detail query bindings into the count" in {
