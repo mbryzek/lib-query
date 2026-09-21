@@ -33,6 +33,26 @@ object InvariantRunner {
     * ask for zero examples either.
     */
   def clampExampleLimit(requested: Int): Int = math.min(math.max(requested, 1), MaxExampleLimit)
+
+  /** The examples are ordered HERE, in Scala, after the limit — never by the detail query.
+    *
+    * A detail query that ends in `order by <expr>` makes the `limit` this runner appends
+    * unreachable: the sort key is an expression over the outer relation, so Postgres puts a
+    * blocking Sort of the whole scanned relation underneath any semi join in the predicate and the
+    * sample can no longer stop at the first violating row. Measured on a million-row fixture of
+    * `court_reserve.sales_details`, `limit 1` went from 1.8s (merge semi join, early stop) to 6.7s
+    * (external merge sort, 350MB spilled to disk, then a million index probes); in production the
+    * same ordering took one check's probe route from 4.5-12.5s to 31-58s, past the 30s deadline
+    * every reader of it uses. The cost lands only while the check is RED, which is exactly when
+    * the examples are wanted.
+    *
+    * Sorting the fetched strings instead buys the readable, repeatable output an `order by 1` was
+    * reaching for at no cost to the plan: there are at most [[MaxExampleLimit]] of them, and they
+    * are already in memory. It cannot make the SAMPLE deterministic — an unordered `limit` picks
+    * an arbitrary subset either way — so what it fixes is how the sample READS, not which rows it
+    * holds. ISS-13029
+    */
+  def orderExamples(examples: Seq[String]): Seq[String] = examples.sorted
 }
 
 /** Executes invariants and reports what each one found.
@@ -67,7 +87,7 @@ class InvariantRunner(connections: InvariantConnections) {
   private def fetchExamples(invariant: InvariantQuery, limit: Int): Option[Seq[String]] = {
     invariant.queryDetails.map { q =>
       connections.withConnection { c =>
-        q.limit(limit).as(SqlParser.str(1).*)(using c)
+        InvariantRunner.orderExamples(q.limit(limit).as(SqlParser.str(1).*)(using c))
       }
     }
   }

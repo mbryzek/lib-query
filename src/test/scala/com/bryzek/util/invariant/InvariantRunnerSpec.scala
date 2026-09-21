@@ -15,6 +15,21 @@ class InvariantRunnerSpec extends BaseSpec {
     InvariantRunner.clampExampleLimit(InvariantRunner.DefaultExampleLimit) mustBe InvariantRunner.DefaultExampleLimit
   }
 
+  // ISS-13029: this is the whole reason a detail query may not carry a top-level `order by`.
+  // Ordering the fetched strings costs nothing -- at most MaxExampleLimit of them, already in
+  // memory -- while ordering in sql makes the runner's own `limit` unreachable and turns a sample
+  // into a full scan with a disk spill.
+  "orderExamples sorts the sample after the limit rather than in sql" in {
+    InvariantRunner.orderExamples(Seq("c", "a", "b")) mustBe Seq("a", "b", "c")
+    InvariantRunner.orderExamples(Seq("club-2 x", "club-1 y", "club-1 a")) mustBe Seq(
+      "club-1 a",
+      "club-1 y",
+      "club-2 x"
+    )
+    InvariantRunner.orderExamples(Nil) mustBe Nil
+    InvariantRunner.orderExamples(Seq("only")) mustBe Seq("only")
+  }
+
   "sorted puts failures first, then errors, then successes" in {
     val ok = InvariantResult.ZeroCount(query("a_ok"), 1)
     val errors = InvariantResult.ErrorsFound(query("b_errors"), 1, 5, None)

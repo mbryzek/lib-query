@@ -42,6 +42,28 @@ class InvariantQuerySpec extends BaseSpec {
     details.queryCount.interpolate() must include("'bad'")
   }
 
+  // ISS-13029: an ordering cannot change a cardinality, and a sort underneath `select count(*)`
+  // is the same blocking sort of the whole scanned relation that the detail query pays for.
+  "InvariantWithDetails leaves the detail query's ordering out of the count" in {
+    val ordered = InvariantWithDetails("ordered", Query("select id from users").orderBy("1"))
+
+    ordered.queryDetails.map(_.sql()) mustBe Some("select id from users order by 1")
+    ordered.queryCount.sql() mustBe "select count(*) from (select id from users) q"
+    ordered.queryCount.sql() must not(include("order by"))
+  }
+
+  "InvariantWithDetails keeps every other clause of the detail query in the count" in {
+    val ordered = InvariantWithDetails(
+      "ordered_and_filtered",
+      Query("select id from users").equals("status", "bad").groupBy("id").orderBy("1")
+    )
+
+    ordered.queryCount.sql() must include("group by id")
+    ordered.queryCount.sql() must include("status = {status}")
+    ordered.queryCount.bindings mustBe ordered.query.bindings
+    ordered.queryCount.sql() must not(include("order by"))
+  }
+
   "withPrefix namespaces the name and nothing else" in {
     val prefixed = details.withPrefix("user_")
     prefixed.name mustBe "user_orphaned_rows"

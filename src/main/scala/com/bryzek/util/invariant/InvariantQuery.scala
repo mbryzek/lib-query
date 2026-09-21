@@ -33,8 +33,15 @@ case class InvariantWithDetails(name: String, query: Query) extends InvariantQue
   // a continuation line reading `| || ' x ' || y` comes back as `| ' x ' || y`, a bitwise-or
   // against a string literal that Postgres has no operator for. The wrapper does not own this
   // sql and must not re-strip it.
+  //
+  // Built from `orderBy = None`. An ordering cannot change a cardinality, so the count never needs
+  // one -- and paying for one is the bug ISS-13029 is about, a blocking sort of the whole scanned
+  // relation underneath the predicate. `generateSql` renders the `orderBy` field into the string
+  // this wrapper reads, so dropping the field here is what keeps it out of the count. An ordering
+  // written INTO a detail query's own sql is invisible from here and is the caller's to leave out;
+  // platform asserts that in `AllInvariantsSpec`.
   override def queryCount: Query = Query(
-    s"select count(*) from (${query.sql()}) q",
+    s"select count(*) from (${query.copy(orderBy = None).sql()}) q",
     bindings = query.bindings
   )
 }
