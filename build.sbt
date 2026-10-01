@@ -273,7 +273,7 @@ lazy val root = project
       // one its consumers actually run and the next dependency sweep has nothing to bump.
       "org.postgresql" % "postgresql" % "42.7.13",
       "org.typelevel" %% "cats-core" % "2.13.0",
-      "joda-time" % "joda-time" % "2.14.3",
+      "joda-time" % "joda-time" % "2.15.0",
       // org.lz4:lz4-java reaches the test classpath only here, transitively:
       // scalatestplus-play -> play-ws -> play -> pekko-serialization-jackson -> lz4-java.
       // Nothing on that classpath can call it. Pekko loads an LZ4 codec reflectively only when
