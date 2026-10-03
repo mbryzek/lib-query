@@ -22,146 +22,16 @@ ThisBuild / sonatypeRepository := "https://central.sonatype.com/api/v1/publisher
 
 ThisBuild / scalaVersion := "3.8.4"
 
-// Every Jackson artifact in this build resolves to one version.
+// The Jackson 2, Jackson 3 and logback security pins are DECLARED in project/BryzekPins.scala, a
+// copy of devops's templates/scala-libs/project/BryzekPins.scala that ci/build.sh holds
+// byte-identical to it, together with the pin specs under src/test/scala/com/bryzek/pins. That
+// file carries why each floor is what it is; an advisory bump is edited there and copied here.
 //
-// Jackson's own compatibility rule is that a release train moves together: the datatype and
-// dataformat modules compile against databind's internal serializer/deserializer SPI, and
-// jackson-module-scala additionally asserts its databind version at runtime and refuses to
-// register outside its own minor line. Only that last one fails loudly; a datatype module left
-// behind on an older line links fine and throws AbstractMethodError or NoSuchMethodError on
-// whichever serializer path first touches a changed SPI method. `JacksonPinSpec` asserts the pair
-// registers, so a partial bump fails by name here rather than opaquely in a consumer.
-//
-// Drift is the default here rather than an accident. play-json and pekko-serialization-jackson
-// contribute the whole family transitively at one version, so pinning a single coordinate wins the
-// conflict only for that artifact and the ones it depends on, leaving cbor/jdk8/jsr310/
-// parameter-names behind. Overriding the whole family is what makes one version true of all of
-// them.
-//
-// The floor is a security one and six advisories set it, so it is stated as a range rather than a
-// single number. jackson-core below 2.15.0 has no nesting-depth limit and throws StackOverflowError
-// on deeply nested input rather than rejecting it (GHSA-h46c-h94j-95f3), and that is the version
-// play-json resolves. jackson-databind below 2.18.8 -- and again on 2.19.0 through 2.21.3 --
-// validates a type id carrying generics by the substring before the `<` and then resolves the type
-// arguments out of the rest of it without ever offering them to the PolymorphicTypeValidator, so an
-// allow-list naming one safe container admits any type smuggled into that container's parameter
-// position (GHSA-j3rv-43j4-c7qm). Databind over that same range also answers
-// `allowIfSubTypeIsArray` on `clazz.isArray()` alone and never validates the array's component
-// type, so a denied class named as the element of an array is admitted and instantiated with no
-// further check (GHSA-rmj7-2vxq-3g9f). jackson-core over that same range applies maxNumberLength to
-// the digits within each chunk fed to the non-blocking parser rather than to the number accumulated
-// across feeds, so a number split across `feedInput` calls is not bounded at all and no chunk ever
-// has to exceed the limit (GHSA-r7wm-3cxj-wff9).
-//
-// jackson-databind carries two more, fixed on each release line separately: below 2.18.11, on
-// 2.19.0 through 2.21.6, and on 2.22.0 through 2.22.2 it completes forward object-id references in
-// time quadratic in their number (GHSA-cxp5-3px4-pw24), and retains every unknown raw type id it
-// is handed (GHSA-wv8q-qhhj-9h54).
-//
-// Those two are the binding ones, and they are why the first is not the number to read off this
-// comment: the lowest this pin may state is 2.18.11, anything chosen on the 2.19-2.21 lines must be
-// 2.21.7 or above, and anything on the 2.22 line must be 2.22.3 or above. 2.22.3 is the head of the
-// Jackson 2 line and the version platform and acumen pin, so a consumer that pins too resolves one
-// Jackson rather than two.
-//
-// This governs THIS build's resolution only -- sbt writes no `dependencyOverrides` into the
-// published POM -- so it decides what this repo compiles and tests against and imposes no floor on
-// a consumer. A consumer states its own, as platform and acumen do.
-//
-// jackson-annotations publishes no patch versions on its 2.20+ lines (maven-metadata.xml runs
-// 2.19.4, 2.20, 2.21, 2.22), so it carries its own version and a patch number there is a 404 that
-// fails the whole resolution.
-lazy val jacksonVersion = "2.22.3"
-lazy val jacksonAnnotationsVersion = "2.22"
-
-ThisBuild / dependencyOverrides ++= Seq(
-  "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
-  "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
-  "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonAnnotationsVersion,
-  "com.fasterxml.jackson.dataformat" % "jackson-dataformat-cbor" % jacksonVersion,
-  "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonVersion,
-  "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
-  "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % jacksonVersion,
-  "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
-)
-
-// logback moves as a PAIR, and the version is a security floor four advisories set.
-//
-// logback reaches this build ONLY through the test classpath: `scalatestplus-play % Test` ->
-// play-test, which declares logback-classic 1.5.18 -> logback-core. Nothing in `src/main` links
-// against it.
-//
-// 1.5.18 is inside the affected range of GHSA-25qh-j22f-pwp8, where logback-core evaluates a
-// conditional configuration element (`<if>`/`<then>`, compiled by Janino) out of the configuration
-// file it was handed, so whoever can write that file or set the environment variable naming it
-// chooses code the JVM then runs. Fixed in 1.5.19.
-//
-// logback-core below 1.5.25 also resolves an `<appender-ref>` out of the appender bag without ever
-// asking whether the configuration DECLARED an appender of that name (GHSA-qqpg-mvqg-649v). It is
-// an ACE against configuration processing -- an attacker who can write the configuration file gets
-// a class already on the class path instantiated -- but the part that shows on a healthy build is
-// quieter: a reference to a name that was never declared leaves the referring logger with NO
-// appenders at all, the declared ones beside it included, and records nothing about it. 1.5.25
-// adds the declaration check, so an undeclared reference is warned about and skipped and the
-// declared appenders beside it are still attached. `LogbackPinSpec` asserts that, because neither
-// half of it can be read off a version number.
-//
-// The binding floor is higher still: through 1.5.32, logback-core's `HardenedObjectInputStream` --
-// the deserializer behind `SimpleSocketServer` and `SimpleSSLSocketServer` -- decided what a
-// socket-delivered logging event may instantiate by PREFIX, so a class name beginning `java.lang`
-// or `java.util` was admitted whatever class it actually named. From 1.5.33 the same decision is an
-// equality test against sixteen named classes, and everything else in those packages is refused
-// with `InvalidClassException` (GHSA-p47f-322f-whfh). `LogbackPinSpec` asks the class itself for
-// that refusal, because a pin that has stopped applying resolves cleanly and says nothing.
-//
-// 1.5.33 bounds what a stream may NAME; it does not bound what the stream may have the JVM
-// SYNTHESISE. Through 1.5.33 `HardenedObjectInputStream` left `resolveProxyClass` to
-// `ObjectInputStream`, which defines a proxy class for whatever interface names the stream carries
-// -- before any of logback's checks run, because those inspect resolved class NAMES and a proxy has
-// none until it has been defined. Whether the proxy then materialises depends on the whitelist
-// naming `java.lang.reflect.Proxy` and the handler's own class; logback's built-in socket whitelist
-// names neither, which is why the advisory calls the injection heavily restricted, but a
-// caller-supplied whitelist can name both and then the stream chooses the interfaces AND the
-// `InvocationHandler` behind them (GHSA-jhq6-gfmj-v8fx, affected through 1.5.33). 1.5.34 overrides
-// `resolveProxyClass` to throw `InvalidClassException` unconditionally, so no whitelist re-admits a
-// proxy and no interface is resolved on the way to refusing one.
-//
-// BOTH COORDINATES, AT ONE VERSION, for three reasons that point the same way. The appender-ref check
-// spans the pair: the guard and its analyser live in logback-core, and logback-classic is what
-// registers the analyser with the processor, so logback-core alone at 1.5.25+ resolves and links
-// and leaves the guard registered by nobody -- which is WORSE than not bumping, because the
-// declared-appender set is then empty for the whole configuration and every appender-ref is
-// skipped, not just the undeclared ones. And the pair are one release train in general: classic
-// subclasses core's appender, model and joran types, and its OSGi manifest imports
-// `ch.qos.logback.core` at `[1.5,2)` rather than at a floor, so overriding one coordinate alone
-// resolves cleanly and breaks where a version conflict is hardest to read -- the first time a
-// logger is configured, as a NoSuchMethodError from inside logback. A split is not safe in either
-// direction; `LogbackPinSpec` drives an event through the pair and reads the resolved core version
-// back, so a partial pin or a deleted override fails by name here rather than in a consumer. The
-// deserialization fix makes the same point concretely: it changed `HardenedObjectInputStream`'s
-// constructors to take a `Context`, and logback-classic 1.5.32's `HardenedLoggingEventInputStream`
-// calls the two-argument one its superclass no longer has, so logback-core alone at 1.5.33+
-// resolves cleanly and throws NoSuchMethodError at class initialization.
-//
-// `dependencyOverrides` RATHER THAN A DECLARED DEPENDENCY, because neither this library nor its
-// suite calls logback: it is absent from the compile tree and so from the published POM, and an
-// override is what keeps it that way -- sbt writes no `dependencyOverrides` into the POM, so this
-// decides what this repo tests against and imposes no floor on a consumer. Declaring it instead
-// would publish a logback edge from a library that never loads it and put a floor under platform
-// and acumen, which take their binding from play-logback and pin it themselves.
-//
-// 1.5.34 IS THE HIGHEST OF THE FOUR FLOORS, not a margin above them. The first three are cleared by
-// 1.5.19, 1.5.25 and 1.5.33; the fourth is the proxy one, which 1.5.33 is inside. So this is the
-// lowest version that answers every advisory, and there is no version below it to fall back to on
-// the grounds that some advisory's own floor is lower. It carries no open advisory of its own and
-// stays on the 1.5 line that play-test 3.0.8 was built against, so nothing else in the resolution
-// moves.
-lazy val logbackVersion = "1.5.34"
-
-ThisBuild / dependencyOverrides ++= Seq(
-  "ch.qos.logback" % "logback-core" % logbackVersion,
-  "ch.qos.logback" % "logback-classic" % logbackVersion,
-)
+// Applied as `dependencyOverrides`, which governs THIS build's resolution only -- sbt writes none
+// of it into the published POM -- so it decides what this repo compiles and tests against and
+// imposes no floor on a consumer. No Jackson 3 resolves here; logback
+// arrives only through `scalatestplus-play % Test`.
+ThisBuild / dependencyOverrides ++= BryzekPins.jackson2 ++ BryzekPins.logback
 
 // Keep the unused browser-automation stack off the test classpath.
 //
