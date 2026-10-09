@@ -146,7 +146,7 @@ lazy val root = project
       // 42.7.13 rather than the advisory's own 42.7.12 floor: both are out of range, and 42.7.13
       // is what platform and acumen already pin, so the driver this library's tests resolve is the
       // one its consumers actually run and the next dependency sweep has nothing to bump.
-      "org.postgresql" % "postgresql" % "42.7.13",
+      "org.postgresql" % "postgresql" % "42.7.14",
       "org.typelevel" %% "cats-core" % "2.13.0",
       "joda-time" % "joda-time" % "2.15.0",
       // org.lz4:lz4-java reaches the test classpath only here, transitively:
