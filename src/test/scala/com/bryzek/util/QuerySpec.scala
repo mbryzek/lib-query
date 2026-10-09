@@ -144,6 +144,10 @@ class QuerySpec extends BaseSpec {
 
     // A large list must bind in linear time: naming each value by rescanning the
     // already-bound variables made a 10k-id `in` clause take minutes of CPU.
+    // The budget separates linear from quadratic, not fast from slow: the linear
+    // bind is ~13ms on an idle box and measured 3084ms cold on a loaded CI runner,
+    // while the quadratic one took ~6 minutes. 30s sits an order of magnitude
+    // from both. ISS-17571
     "large list binds every value, quickly" in {
       val values = (1 to 10000).map(i => s"club-$i")
       val start = System.nanoTime()
@@ -153,7 +157,7 @@ class QuerySpec extends BaseSpec {
       q.bindings.map(_.name).distinct.size mustBe values.size
       q.sql() must startWith("select 1 from clubs where clubs.id in ({clubs.id}, {clubs.id_2}, {clubs.id_3},")
       q.sql() must endWith("{clubs.id_10000})")
-      elapsedMs must be < 2000L
+      elapsedMs must be < 30000L
     }
   }
 
