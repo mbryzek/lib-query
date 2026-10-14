@@ -7,9 +7,8 @@
 # unchanged here.
 #
 # WHAT A GREEN HERE VOUCHES FOR: this library's own sources compile under
-# `-Werror` with the full `-Wunused` set, its sources AND its `build.sbt` are
-# scalafmt-clean, and its own ScalaTest suite passes, on the exact commit about
-# to be squashed.
+# `-Werror` with the full `-Wunused` set and its own ScalaTest suite passes, on
+# the exact commit about to be squashed.
 #
 # WHAT IT DOES NOT VOUCH FOR, and this is the important half: THAT ANY CONSUMER
 # STILL COMPILES. Nothing in the fleet builds `platform` or `acumen` against a
@@ -34,13 +33,13 @@
 # test here ever does reach a real Postgres, this file has to grow the block back
 # and the `ci-needs` line has to grow `docker, registry, database` with it.
 #
-# `scalafmtSbtCheck` IS SEPARATE FROM `scalafmtCheckAll` AND BOTH ARE NEEDED.
-# `scalafmtOnCompile := true` formats `src/`, so the sources are clean by
-# construction and `scalafmtCheckAll` is the guard against somebody turning that
-# off. NOTHING formats `build.sbt` — which is exactly why all four lib build.sbt
-# files had drifted out of format by the time this file was written, unnoticed,
-# with a formatter configured in each repo. `scalafmtSbtCheck` is the half that
-# was actually missing.
+# FORMATTING IS REPORTED, NEVER ENFORCED (ISS-19427). A build fails only for a
+# functional problem, and an unformatted file behaves exactly as its formatted
+# copy does. `scalafmtOnCompile := true` formats the sources, and
+# `scripts/check-format` (a copy of devops templates/ci/check-format, which runs
+# `dev fmt report`: the native scalafmt CLI over the sources AND `build.sbt`,
+# which nothing else formats) prints every unformatted file and exits 0. The
+# hygiene sweep runs it over `main` and fixes what it finds.
 #
 # `# ci-needs: heap:4G` — MEASURED, not copied (ISS-1171's method, run
 # 2026-08-11). Cold checkout, `SBT_OPTS="-Xmx4G -Xss4M"`, process-tree RSS
@@ -76,7 +75,7 @@ for pair in "${pins[@]}"; do
   fi
 done
 
-# One sbt invocation, in this order deliberately: sbt aborts the remaining tasks
-# on the first failure, so a badly formatted PR is told so in seconds rather than
-# after a cold compile.
-sbt scalafmtCheckAll scalafmtSbtCheck test
+# ci-advisory: scripts/check-format
+scripts/check-format || echo "check-format: could not measure this tree — advisory, nothing fails on it"
+
+sbt test
