@@ -99,7 +99,11 @@ case class Query(
   }
 
   private def generateSql(): String = {
-    val mainQuery = Query.joinClauses(
+    assembleSql(mainSql(), unions.map { case (unionType, query) => unionType -> query.generateSql() }, trailingClauses)
+  }
+
+  private def mainSql(): String = {
+    Query.joinClauses(
       Seq(
         Some(baseQuery),
         generateSqlFilters(),
@@ -107,19 +111,21 @@ case class Query(
         having.map { v => s"having $v" }
       ).flatten
     )
+  }
 
-    val withUnions = unions.foldLeft(mainQuery) { case (sql, (unionType, query)) =>
-      Query.appendClause(sql, s"$unionType ${query.generateSql()}")
+  private def trailingClauses: Seq[String] = {
+    Seq(
+      orderBy.map { v => s"order by $v" },
+      limit.map { v => s"limit $v" },
+      offset.map { v => s"offset $v" }
+    ).flatten
+  }
+
+  private def assembleSql(main: String, arms: Seq[(String, String)], trailing: Seq[String]): String = {
+    val withUnions = arms.foldLeft(main) { case (sql, (unionType, armSql)) =>
+      Query.appendClause(sql, s"$unionType $armSql")
     }
-
-    Query.joinClauses(
-      Seq(
-        Some(withUnions),
-        orderBy.map { v => s"order by $v" },
-        limit.map { v => s"limit $v" },
-        offset.map { v => s"offset $v" }
-      ).flatten
-    )
+    Query.joinClauses(withUnions +: trailing)
   }
 
   private def generateSqlFilters(): Option[String] = {
@@ -240,21 +246,36 @@ case class Query(
 
   private def subQueryFilter(op: String, name: String, subQuery: Query): Query = {
     Sanitize.assertSafe(name)
-    val (q, sql) = subQuery.bindings
-      .foldLeft((this, subQuery.sql())) { case ((q, sql), bp) =>
-        val (newQ, localParam) = q.bindVar(bp.name, bp.param.original)
-        val modSql = if (localParam.name != bp.name) {
-          // We have a conflict on the name of a bind variable in the subquery.
-          // Modify the subquery to use the new unique bind variable name.
-          sql.replaceAll(s"\\{${bp.name}}", s"{${localParam.name}}")
-        } else {
-          sql
-        }
-        (newQ, modSql)
-      }
-
+    val (q, sql) = absorb(subQuery, Map.empty)
     q.withFilter(
       QueryFilter(s"$name $op (${Query.embeddable(sql)})")
+    )
+  }
+
+  /** Binds every variable of `subQuery` and of its union arms into this query, returning the query and the subquery's
+    * SQL with each placeholder pointing at the name its value was bound under.
+    *
+    * Renaming is scoped to the query holding the binding: two arms that each bind `status` keep their own values, which
+    * a rename across the rendered text would collapse onto whichever was bound last. A placeholder a query does not
+    * bind itself resolves through `inherited`, the names of the queries it is an arm of.
+    */
+  private def absorb(subQuery: Query, inherited: Map[String, String]): (Query, String) = {
+    val (bound, params) = bindAll(subQuery.bindings.map(bp => bp.name -> bp.param.original))
+    val names = inherited ++ subQuery.bindings.map(_.name).zip(params.map(_.name))
+
+    val (q, arms) = subQuery.unions.foldLeft((bound, Vector.empty[(String, String)])) {
+      case ((q, arms), (unionType, arm)) =>
+        val (next, armSql) = q.absorb(arm, names)
+        (next, arms :+ (unionType -> armSql))
+    }
+
+    (
+      q,
+      subQuery.assembleSql(
+        Query.renamePlaceholders(subQuery.mainSql(), names),
+        arms,
+        subQuery.trailingClauses.map(Query.renamePlaceholders(_, names))
+      )
     )
   }
 
@@ -566,6 +587,17 @@ case class Query(
 }
 
 object Query {
+
+  private val Placeholder = """\{([^{}]+)\}""".r
+
+  /** Rewrites every `{name}` placeholder in one pass, so a new name that equals another old name is never renamed again.
+    */
+  private def renamePlaceholders(sql: String, names: Map[String, String]): String = {
+    Placeholder.replaceAllIn(
+      sql,
+      m => java.util.regex.Matcher.quoteReplacement(names.get(m.group(1)).fold(m.matched)(n => s"{$n}"))
+    )
+  }
 
   /** True when the last line of `sql` opens a `--` comment, i.e. anything appended without a line break first would
     * land inside that comment rather than in the statement.

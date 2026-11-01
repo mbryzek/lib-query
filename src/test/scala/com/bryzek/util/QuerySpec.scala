@@ -1,6 +1,6 @@
 package com.bryzek.util
 
-import helpers.BaseSpec
+import helpers.{BaseSpec, RecordingConnection}
 import org.joda.time.{DateTime, DateTimeZone}
 
 import scala.util.{Failure, Success, Try}
@@ -461,6 +461,120 @@ class QuerySpec extends BaseSpec {
         .in("id", Query("select id from tmp where id = {id}").bind("id", "foo"))
       q.sql() mustBe "select 1 from users where id = {id} and id in (select id from tmp where id = {id_2})"
       q.interpolate() mustBe "select 1 from users where id = 'a' and id in (select id from tmp where id = 'foo')"
+    }
+  }
+
+  // Each case fills the statement through anorm against a recording connection, so a placeholder with no
+  // value fails here exactly as it does at execution (anorm's MissingParameter). No database is opened.
+  "in query over a union" must {
+    "a union of two bound queries runs" in {
+      val q = Query("select 1 from users").in(
+        "id",
+        Query("select id from a").equals("a_id", "foo").union(Query("select id from b").equals("b_id", "bar"))
+      )
+      q.sql() mustBe "select 1 from users where id in (select id from a where a_id = {a_id} UNION select id from b where b_id = {b_id})"
+      q.interpolate() mustBe "select 1 from users where id in (select id from a where a_id = 'foo' UNION select id from b where b_id = 'bar')"
+      RecordingConnection.fill(q) mustBe Seq("foo", "bar")
+    }
+
+    "notIn a union of two bound queries runs" in {
+      val q = Query("select 1 from users").notIn(
+        "id",
+        Query("select id from a").equals("a_id", "foo").unionAll(Query("select id from b").equals("b_id", "bar"))
+      )
+      q.sql() mustBe "select 1 from users where id not in (select id from a where a_id = {a_id} UNION ALL select id from b where b_id = {b_id})"
+      RecordingConnection.fill(q) mustBe Seq("foo", "bar")
+    }
+
+    "an arm's name conflicting with the parent is renamed in that arm" in {
+      val q = Query("select 1 from users")
+        .equals("b_id", "parent")
+        .in("id", Query("select id from a").union(Query("select id from b").equals("b_id", "arm")))
+      q.sql() mustBe "select 1 from users where b_id = {b_id} and id in (select id from a UNION select id from b where b_id = {b_id_2})"
+      RecordingConnection.fill(q) mustBe Seq("parent", "arm")
+    }
+
+    // Renaming across the whole rendered text would point both arms at whichever was bound last.
+    "two arms binding one name each keep their own value" in {
+      val q = Query("select 1 from users").in(
+        "id",
+        Query("select id from a").equals("status", "first").union(Query("select id from b").equals("status", "second"))
+      )
+      q.sql() mustBe "select 1 from users where id in (select id from a where status = {status} UNION select id from b where status = {status_2})"
+      RecordingConnection.fill(q) mustBe Seq("first", "second")
+    }
+
+    // The subquery's status_2 takes the name the first rename would hand out, and sequential
+    // renaming would rewrite the renamed placeholder a second time.
+    "a rename does not collide with a name the subquery already holds" in {
+      val q = Query("select 1 from users")
+        .equals("status", "parent")
+        .in("id", Query("select id from a").equals("status", "one").equals("status", "two"))
+      q.sql() mustBe "select 1 from users where status = {status} and id in (select id from a where status = {status_2} and status = {status_2_2})"
+      RecordingConnection.fill(q) mustBe Seq("parent", "one", "two")
+    }
+
+    "an arm's reference to a name its parent bound follows the parent's rename" in {
+      val q = Query("select 1 from users")
+        .equals("id", "parent")
+        .in(
+          "id",
+          Query("select id from a where id = {id}")
+            .bind("id", "sub")
+            .union(Query("select id from b where id = {id}"))
+        )
+      q.sql() mustBe "select 1 from users where id = {id} and id in (select id from a where id = {id_2} UNION select id from b where id = {id_2})"
+      RecordingConnection.fill(q) mustBe Seq("parent", "sub", "sub")
+    }
+
+    // The shape platform's ConnectionGamesService sends: arms sharing names and values, which
+    // already ran because the first query's bindings happened to cover every arm.
+    "arms binding the same names and values still read those values" in {
+      val statuses = Seq("active", "invited")
+      val q = Query("select 1 from users").in(
+        "id",
+        Query("select id from a").in("status", statuses).union(Query("select id from b").in("status", statuses))
+      )
+      q.interpolate() mustBe "select 1 from users where id in (select id from a where status in ('active', 'invited') UNION select id from b where status in ('active', 'invited'))"
+      RecordingConnection.fill(q) mustBe Seq("active", "invited", "active", "invited")
+    }
+
+    "a union nested inside an arm runs" in {
+      val q = Query("select 1 from users").in(
+        "id",
+        Query("select id from a")
+          .equals("x", "one")
+          .union(
+            Query("select id from b").equals("x", "two").union(Query("select id from c").equals("x", "three"))
+          )
+      )
+      q.sql() mustBe "select 1 from users where id in (select id from a where x = {x} UNION select id from b where x = {x_2} UNION select id from c where x = {x_3})"
+      RecordingConnection.fill(q) mustBe Seq("one", "two", "three")
+    }
+
+    "a subquery's order by placeholder follows its rename, and an arm's casts survive" in {
+      val q = Query("select 1 from users")
+        .equals("n", 1)
+        .in(
+          "id",
+          Query("select id from a")
+            .equals("n", 2)
+            .union(Query("select id from b").equals("n", 3))
+            .orderBy("id = {n} desc")
+        )
+      q.sql() mustBe "select 1 from users where n = {n}::integer and id in (select id from a where n = {n_2}::integer UNION select id from b where n = {n_3}::integer order by id = {n_2} desc)"
+      RecordingConnection.fill(q) mustBe Seq("1", "2", "3", "2")
+    }
+
+    "a subquery whose arm ends in a comment still closes its paren" in {
+      val q = Query("select 1 from users").in(
+        "id",
+        Query("select id from a")
+          .equals("a_id", "foo")
+          .union(Query("select id from b").matchNoRows(comment = Some("not authorized")))
+      )
+      q.sql() must endWith("\n)")
+      RecordingConnection.fill(q) mustBe Seq("foo")
     }
   }
 
