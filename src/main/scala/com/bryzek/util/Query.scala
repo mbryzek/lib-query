@@ -165,15 +165,7 @@ case class Query(
 
   def interpolate(): String = {
     val (query, bound) = rendered()
-    bound.foldLeft(query) { case (s, bp) =>
-      (bp.param.cast.toSeq.map { c => s"::$c" } :+ "").distinct
-        .map { c =>
-          s"\\{${bp.name}}$c"
-        }
-        .foldLeft(s) { case (s, pattern) =>
-          s.replaceAll(pattern, java.util.regex.Matcher.quoteReplacement(bp.param.interpolationValue))
-        }
-    }
+    Query.substitutePlaceholders(query, bound.map(bp => bp.name -> bp.param).toMap)
   }
 
   @tailrec
@@ -599,6 +591,7 @@ case class Query(
 object Query {
 
   private val Placeholder = """\{([^{}]+)\}""".r
+  private val PlaceholderWithCast = s"${Placeholder.regex}(::\\w+)?".r
 
   /** Rewrites every `{name}` placeholder in one pass, so a new name that equals another old name is never renamed again.
     */
@@ -606,6 +599,23 @@ object Query {
     Placeholder.replaceAllIn(
       sql,
       m => java.util.regex.Matcher.quoteReplacement(names.get(m.group(1)).fold(m.matched)(n => s"{$n}"))
+    )
+  }
+
+  /** Replaces every `{name}` placeholder with its value in one pass, so a value that reads like a placeholder is never
+    * read as one. The value carries its own type, so a `::cast` following the placeholder is dropped when it is the
+    * parameter's own and kept otherwise. An unbound placeholder is left as written.
+    */
+  private def substitutePlaceholders(sql: String, params: Map[String, Parameter[?]]): String = {
+    PlaceholderWithCast.replaceAllIn(
+      sql,
+      m => {
+        val rendered = params.get(m.group(1)).fold(m.matched) { p =>
+          val cast = Option(m.group(2)).getOrElse("")
+          p.interpolationValue + (if (p.cast.exists(c => s"::$c" == cast)) "" else cast)
+        }
+        java.util.regex.Matcher.quoteReplacement(rendered)
+      }
     )
   }
 

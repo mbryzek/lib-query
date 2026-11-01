@@ -466,6 +466,58 @@ class QuerySpec extends BaseSpec {
 
   // Each case fills the statement through anorm against a recording connection, so a placeholder with no
   // value fails here exactly as it does at execution (anorm's MissingParameter). No database is opened.
+  "interpolate" must {
+    "leaves a bound value reading like a placeholder intact when a later binding has that name" in {
+      Query("select 1 from t")
+        .equals("x", "{y}")
+        .equals("y", "three")
+        .interpolate() mustBe "select 1 from t where x = '{y}' and y = 'three'"
+    }
+
+    "leaves a bound value reading like a placeholder intact when an earlier binding has that name" in {
+      Query("select 1 from t")
+        .equals("y", "three")
+        .equals("x", "{y}")
+        .interpolate() mustBe "select 1 from t where y = 'three' and x = '{y}'"
+    }
+
+    "leaves a bound value reading like a placeholder intact across a union" in {
+      Query("select id from a")
+        .equals("x", "{y}")
+        .union(Query("select id from b").equals("y", "three"))
+        .interpolate() mustBe "select id from a where x = '{y}' UNION select id from b where y = 'three'"
+    }
+
+    "drops the parameter's own cast from the value" in {
+      val id = java.util.UUID.fromString("00000000-0000-0000-0000-000000000001")
+      Query("select 1 from t").equals("id", id).interpolate() mustBe s"select 1 from t where id = '$id'"
+    }
+
+    "keeps a cast that is not the parameter's own" in {
+      Query("select {x}::text, {n}::text, {n}::integer")
+        .bind("x", "a")
+        .bind("n", 1)
+        .interpolate() mustBe "select 'a'::text, 1::text, 1"
+    }
+
+    "gives each union arm binding one name its own value" in {
+      Query("select id from a")
+        .equals("status", "first")
+        .union(Query("select id from b").equals("status", "second"))
+        .interpolate() mustBe "select id from a where status = 'first' UNION select id from b where status = 'second'"
+    }
+
+    "leaves an unbound placeholder as written" in {
+      Query("select {unbound}::text, '{\"a\": 1}'").interpolate() mustBe "select {unbound}::text, '{\"a\": 1}'"
+    }
+
+    "keeps replacement metacharacters in a value literal" in {
+      Query("select 1 from t")
+        .equals("x", "$1\\")
+        .interpolate() mustBe "select 1 from t where x = '$1\\'"
+    }
+  }
+
   "in query over a union" must {
     "a union of two bound queries runs" in {
       val q = Query("select 1 from users").in(
