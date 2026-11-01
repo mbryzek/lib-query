@@ -527,6 +527,18 @@ class QuerySpec extends BaseSpec {
       RecordingConnection.fill(q) mustBe Seq("parent", "sub", "sub")
     }
 
+    // The shape platform's ConnectionGamesService sends: arms sharing names and values, which
+    // already ran because the first query's bindings happened to cover every arm.
+    "arms binding the same names and values still read those values" in {
+      val statuses = Seq("active", "invited")
+      val q = Query("select 1 from users").in(
+        "id",
+        Query("select id from a").in("status", statuses).union(Query("select id from b").in("status", statuses))
+      )
+      q.interpolate() mustBe "select 1 from users where id in (select id from a where status in ('active', 'invited') UNION select id from b where status in ('active', 'invited'))"
+      RecordingConnection.fill(q) mustBe Seq("active", "invited", "active", "invited")
+    }
+
     "a union nested inside an arm runs" in {
       val q = Query("select 1 from users").in(
         "id",
