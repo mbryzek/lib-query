@@ -803,13 +803,57 @@ class QuerySpec extends BaseSpec {
       q.interpolate() mustBe "select id from users where status = 'active' UNION select id from admins where role = 'super'"
     }
 
-    "with same bind variable name uses first value for all" in {
+    "with same bind variable name gives each arm its own value" in {
       val q = Query("select id from users")
         .equals("status", "active")
         .union(Query("select id from admins").equals("status", "enabled"))
-      q.sql() mustBe "select id from users where status = {status} UNION select id from admins where status = {status}"
-      // Note: same bind variable name means first value is used for both
-      q.interpolate() mustBe "select id from users where status = 'active' UNION select id from admins where status = 'active'"
+      q.sql() mustBe "select id from users where status = {status} UNION select id from admins where status = {status_2}"
+      q.interpolate() mustBe "select id from users where status = 'active' UNION select id from admins where status = 'enabled'"
+      RecordingConnection.fill(q) mustBe Seq("active", "enabled")
+    }
+
+    "three arms binding one name, nested and flat, each keep their own value" in {
+      val q = Query("select id from a")
+        .equals("x", "one")
+        .unionAll(Query("select id from b").equals("x", "two").union(Query("select id from c").equals("x", "three")))
+        .unionAll(Query("select id from d").equals("x", "four"))
+      q.sql() mustBe "select id from a where x = {x} UNION ALL select id from b where x = {x_2} UNION select id from c where x = {x_3} UNION ALL select id from d where x = {x_4}"
+      q.interpolate() mustBe "select id from a where x = 'one' UNION ALL select id from b where x = 'two' UNION select id from c where x = 'three' UNION ALL select id from d where x = 'four'"
+      RecordingConnection.fill(q) mustBe Seq("one", "two", "three", "four")
+    }
+
+    "an arm with no binding of its own resolves through the parent" in {
+      val q = Query("select id from users where status = {status}")
+        .bind("status", "active")
+        .union(Query("select id from admins where status = {status}"))
+        .union(Query("select id from guests").equals("status", "invited"))
+      q.sql() mustBe "select id from users where status = {status} UNION select id from admins where status = {status} UNION select id from guests where status = {status_2}"
+      RecordingConnection.fill(q) mustBe Seq("active", "active", "invited")
+    }
+
+    "a parent's order by placeholder keeps the parent's value" in {
+      val q = Query("select id from users")
+        .equals("n", 1)
+        .union(Query("select id from admins").equals("n", 2))
+        .orderBy("id = {n} desc")
+      q.sql() mustBe "select id from users where n = {n}::integer UNION select id from admins where n = {n_2}::integer order by id = {n} desc"
+      RecordingConnection.fill(q) mustBe Seq("1", "2", "1")
+    }
+
+    "an arm's own name taken by an earlier rename does not collide" in {
+      val q = Query("select id from users")
+        .equals("x", "parent")
+        .union(Query("select id from a").equals("x", "one").equals("x", "two"))
+      q.sql() mustBe "select id from users where x = {x} UNION select id from a where x = {x_2} and x = {x_2_2}"
+      RecordingConnection.fill(q) mustBe Seq("parent", "one", "two")
+    }
+
+    "a union's subquery filter keeps its values through the rename" in {
+      val q = Query("select id from users")
+        .equals("x", "parent")
+        .union(Query("select id from a").in("id", Query("select id from b").equals("x", "sub")).equals("x", "arm"))
+      q.sql() mustBe "select id from users where x = {x} UNION select id from a where id in (select id from b where x = {x_2}) and x = {x_2_2}"
+      RecordingConnection.fill(q) mustBe Seq("parent", "sub", "arm")
     }
 
     "with different bind variable names" in {
