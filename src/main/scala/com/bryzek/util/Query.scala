@@ -72,11 +72,7 @@ case class Query(
   }
 
   def anormSql(): SimpleSql[Row] = {
-    SQL(sql()).on(allBindings.map(b => b.param.toNamedParameter(b.name))*)
-  }
-
-  private def allBindings: Seq[BoundParameter] = {
-    bindings ++ unions.flatMap(_._2.allBindings)
+    SQL(sql()).on(rendered()._2.map(b => b.param.toNamedParameter(b.name))*)
   }
 
   def withDebugging: Query = {
@@ -87,9 +83,10 @@ case class Query(
     val query = generateSql()
     if (debugging) {
       println(s"SQL QUERY: $query")
-      if (bindings.nonEmpty) {
+      val bound = rendered()._2
+      if (bound.nonEmpty) {
         println(s"BIND VARIABLES:")
-        bindings.foreach { bp =>
+        bound.foreach { bp =>
           println(s" - ${bp.name}: ${bp.param.value}")
         }
         println(s"\n\nINTERPOLATED: ${interpolate()}")
@@ -98,8 +95,24 @@ case class Query(
     query
   }
 
-  private def generateSql(): String = {
-    assembleSql(mainSql(), unions.map { case (unionType, query) => unionType -> query.generateSql() }, trailingClauses)
+  private def generateSql(): String = rendered()._1
+
+  /** The statement and every value it binds. Each union arm's variables are absorbed under names of their own, so the
+    * statement that runs, the bindings handed to anorm (which keeps one value per name) and [[interpolate]] all agree
+    * when two arms bind one name. This query's own names are left as they are, so an arm with no binding of its own
+    * resolves through them.
+    */
+  private def rendered(): (String, Seq[BoundParameter]) = {
+    val (q, arms) = absorbArms(this.copy(unions = Nil), Map.empty)
+    (assembleSql(mainSql(), arms, trailingClauses), q.bindings)
+  }
+
+  /** Absorbs this query's union arms into `target`, returning it with each arm's rendered SQL. */
+  private def absorbArms(target: Query, names: Map[String, String]): (Query, Seq[(String, String)]) = {
+    unions.foldLeft((target, Vector.empty[(String, String)])) { case ((q, arms), (unionType, arm)) =>
+      val (next, armSql) = q.absorb(arm, names)
+      (next, arms :+ (unionType -> armSql))
+    }
   }
 
   private def mainSql(): String = {
@@ -151,8 +164,8 @@ case class Query(
   }
 
   def interpolate(): String = {
-    // The first binding of a name wins: union arms may each bind the same name.
-    Query.substitutePlaceholders(generateSql(), allBindings.reverse.map(bp => bp.name -> bp.param).toMap)
+    val (query, bound) = rendered()
+    Query.substitutePlaceholders(query, bound.map(bp => bp.name -> bp.param).toMap)
   }
 
   @tailrec
@@ -256,11 +269,7 @@ case class Query(
     val (bound, params) = bindAll(subQuery.bindings.map(bp => bp.name -> bp.param.original))
     val names = inherited ++ subQuery.bindings.map(_.name).zip(params.map(_.name))
 
-    val (q, arms) = subQuery.unions.foldLeft((bound, Vector.empty[(String, String)])) {
-      case ((q, arms), (unionType, arm)) =>
-        val (next, armSql) = q.absorb(arm, names)
-        (next, arms :+ (unionType -> armSql))
-    }
+    val (q, arms) = subQuery.absorbArms(bound, names)
 
     (
       q,
