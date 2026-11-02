@@ -68,20 +68,32 @@ class InvariantRunner(connections: InvariantConnections) {
     exampleLimit: Int = InvariantRunner.DefaultExampleLimit
   ): Seq[InvariantResult] = {
     val limit = InvariantRunner.clampExampleLimit(exampleLimit)
-    InvariantResult.sorted(invariants.map { i =>
-      val start = System.currentTimeMillis()
-      def duration = System.currentTimeMillis() - start
+    InvariantResult.sorted(invariants.map(execute(_, limit)))
+  }
 
-      Try {
-        connections.withConnection { c =>
-          i.queryCount.as(SqlParser.long(1).single)(using c)
-        }
-      } match {
-        case Success(count) if count == 0 => InvariantResult.ZeroCount(i, duration)
-        case Success(count) => InvariantResult.ErrorsFound(i, duration, count, fetchExamples(i, limit))
-        case Failure(ex) => InvariantResult.Failure(i, duration, ex)
+  /** One invariant's whole measurement: the count and, when the count is not zero, the examples.
+    *
+    * Nothing either query throws leaves this method, so one check's failure is that check's result
+    * and the other checks in the run still report. The duration is read after the last query this
+    * check ran, which is what it cost, examples included.
+    */
+  private def execute(i: InvariantQuery, limit: Int): InvariantResult = {
+    val start = System.currentTimeMillis()
+    def duration = System.currentTimeMillis() - start
+
+    Try {
+      connections.withConnection { c =>
+        i.queryCount.as(SqlParser.long(1).single)(using c)
       }
-    })
+    } match {
+      case Success(count) if count == 0 => InvariantResult.ZeroCount(i, duration)
+      case Success(count) =>
+        Try(fetchExamples(i, limit)) match {
+          case Success(examples) => InvariantResult.ErrorsFound(i, duration, count, examples)
+          case Failure(ex) => InvariantResult.Failure(i, duration, new InvariantExamplesException(count, ex))
+        }
+      case Failure(ex) => InvariantResult.Failure(i, duration, ex)
+    }
   }
 
   private def fetchExamples(invariant: InvariantQuery, limit: Int): Option[Seq[String]] = {

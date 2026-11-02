@@ -1,5 +1,12 @@
 package com.bryzek.util.invariant
 
+/** The count of a red check succeeded and its examples query then failed. The count is true and is
+  * kept here, in the message every reader of a [[InvariantResult.Failure]] renders; the original
+  * failure is the cause.
+  */
+final class InvariantExamplesException(val count: Long, cause: Throwable)
+  extends RuntimeException(s"Found $count violation(s), but the examples query failed: $cause", cause)
+
 /** What running one [[InvariantQuery]] produced. */
 sealed trait InvariantResult {
   def invariant: InvariantQuery
@@ -23,7 +30,9 @@ object InvariantResult {
   ) extends InvariantResult
 
   /** The check itself failed — a bad query, a missing table, a timeout. Distinct from
-    * `ErrorsFound` because it says nothing about whether the invariant holds.
+    * `ErrorsFound` because no complete answer was measured. A failed count says nothing about
+    * whether the invariant holds; when the count succeeded and only its examples failed, `error`
+    * is an [[InvariantExamplesException]] carrying that count.
     */
   case class Failure(override val invariant: InvariantQuery, override val durationMillis: Long, error: Throwable)
     extends InvariantResult
