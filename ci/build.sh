@@ -12,12 +12,13 @@
 # WHAT IT DOES NOT VOUCH FOR, and this is the important half: THAT ANY CONSUMER
 # STILL COMPILES. Nothing in the fleet builds `platform` or `acumen` against a
 # lib PR's tree. A consumer resolves a RELEASED version out of Maven Central, and
-# no released version exists until a human runs `dev release lib` — which prompts
-# and shells out to GPG, so a merge here publishes nothing. So a PR that changes
-# a rendered SQL fragment is green here and can still break a consumer at the
-# moment somebody bumps the pin. That break surfaces in the CONSUMER's own
-# version-bump PR, verified by the consumer's own `ci`, which is where
-# `dev release lib` and `Agent::LibraryPin` already put it. Enrolling this repo
+# no released version exists until the library's rollout
+# (`dev rollout --app lib-query`) tags main and a runner publishes it, so a merge
+# here publishes nothing. So a PR that changes a rendered SQL fragment is green
+# here and can still break a consumer at the moment somebody bumps the pin. That
+# break surfaces in the CONSUMER's own version-bump PR, verified by the
+# consumer's own build, which is where the rollout and `Agent_library_pin`
+# already put it. Enrolling this repo
 # narrows nothing about that and is not meant to.
 #
 # NO DATABASE BLOCK, AND THAT IS A CLAIM WORTH CHECKING RATHER THAN A DEFAULT,
