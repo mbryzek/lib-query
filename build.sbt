@@ -1,6 +1,6 @@
 name := "lib-query"
 
-version := "0.1.71"
+version := "0.1.72"
 
 // Publishing metadata, the guava pin, the browser-stack exclusions, the compiler gate and the
 // root project's test reporting are shared by every lib-* repository and DECLARED in
