@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # lib-query's build (ISS-2173). READ devops/templates/ci/build.sh AND
-# devops/docs/ci.md FIRST: the three load-bearing properties — landing this file
-# IS the enrolment, `set -euo pipefail` is not style, and the fleet posts the
-# `ci` context — are explained there and are unchanged here.
+# devops/docs/ci.md FIRST: landing this file IS the enrolment and
+# `set -euo pipefail` is not style. This is a FAST repository: the fleet never
+# builds it, and the session runs this script on the pull request's head at
+# `dev agent pr ready`, which records the result and merges on green.
 #
 # WHAT A GREEN HERE VOUCHES FOR: this library's own sources compile under
 # `-Werror` with the full `-Wunused` set and its own ScalaTest suite passes, on
@@ -100,12 +101,12 @@ for pair in "${synced[@]}"; do
   dev repo cat devops "templates/$template" >"$template_bytes" ||
     dev repo cat devops "templates/$template" >"$template_bytes" || read_rc=$?
   if [ "$read_rc" -ne 0 ]; then
-    echo "ci/build.sh: could not read devops templates/$template (dev repo cat exit $read_rc, twice) -- a read failure, not a drift in $copy; nothing was measured" >&2
+    echo "ci/build.fast.sh: could not read devops templates/$template (dev repo cat exit $read_rc, twice) -- a read failure, not a drift in $copy; nothing was measured" >&2
     rm -f "$template_bytes"
     exit 75
   fi
   if ! diff -u "$template_bytes" "$copy"; then
-    echo "ci/build.sh: sync it -- dev repo cat devops templates/$template > $copy" >&2
+    echo "ci/build.fast.sh: sync it -- dev repo cat devops templates/$template > $copy" >&2
     rm -f "$template_bytes"
     exit 1
   fi
