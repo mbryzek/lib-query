@@ -3,18 +3,17 @@ name := "lib-query"
 version := "0.2.27"
 
 // Publishing metadata, the guava pin, the browser-stack exclusions, the compiler gate and the
-// root project's test reporting are shared by every lib-* repository and DECLARED in
-// project/BryzekLibSettings.scala, a copy of devops's
-// templates/scala-libs/project/BryzekLibSettings.scala that ci/build.fast.sh holds byte-identical to
-// it. That file carries why each setting is what it is; a change is edited there and copied here.
+// root project's test reporting are shared by every lib-* repository and DECLARED in lib-build's
+// BryzekLibSettings, which project/plugins.sbt brings in with lib-build-sbt. That file carries why
+// each setting is what it is; a change is released there and the version bumped here.
 BryzekLibSettings.buildSettings("lib-query")
 
 ThisBuild / scalaVersion := "3.10.0"
 
-// The Jackson 2, Jackson 3 and logback security pins are DECLARED in project/BryzekPins.scala, a
-// copy of devops's templates/scala-libs/project/BryzekPins.scala that ci/build.fast.sh holds
-// byte-identical to it, together with the pin specs under src/test/scala/com/bryzek/pins. That
-// file carries why each floor is what it is; an advisory bump is edited there and copied here.
+// The Jackson 2, Jackson 3 and logback security pins are DECLARED in lib-build's BryzekPins (from
+// lib-build-sbt in project/plugins.sbt), and the pin specs under src/test/scala/com/bryzek/pins run
+// lib-build-testkit's suites against this build's resolution. That file carries why each floor is
+// what it is; an advisory bump is released there and the version bumped here.
 //
 // Applied as `dependencyOverrides`, which governs THIS build's resolution only -- sbt writes none
 // of it into the published POM -- so it decides what this repo compiles and tests against and
@@ -60,6 +59,10 @@ lazy val root = project
       // compile-scope dependency in the published POM; this one is test scope, so it reaches no
       // consumer. ISS-4734
       ("org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test)
-        .exclude("org.lz4", "lz4-java")
+        .exclude("org.lz4", "lz4-java"),
+      // The pin suites JacksonPinSpec and LogbackPinSpec extend. Every dependency of the testkit is
+      // Provided, so each suite asserts the versions this build resolves. Same version as
+      // lib-build-sbt in project/plugins.sbt.
+      "com.bryzek" %% "lib-build-testkit" % "0.0.1" % Test
     )
   )
