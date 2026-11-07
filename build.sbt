@@ -10,6 +10,10 @@ BryzekLibSettings.buildSettings("lib-query")
 
 ThisBuild / scalaVersion := "3.10.0"
 
+// lib-build-testkit (the pin suites, % Test below) is published only to maven.bryzek.com; the
+// resolver in project/plugins.sbt reaches the meta-build alone.
+ThisBuild / resolvers += "Bryzek Maven repository" at "https://maven.bryzek.com"
+
 // The Jackson 2, Jackson 3 and logback security pins are DECLARED in lib-build's BryzekPins (from
 // lib-build-sbt in project/plugins.sbt), and the pin specs under src/test/scala/com/bryzek/pins run
 // lib-build-testkit's suites against this build's resolution. That file carries why each floor is
