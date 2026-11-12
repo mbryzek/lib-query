@@ -52,6 +52,8 @@ object Parameter {
       case i: Array[Byte] => TypeBytes(i)
       case None => TypeUnit
       case Some(v) => from(v)
+      // Before Product: a List is a Product, and its toString is no array literal.
+      case i: Seq[?] if i.forall(_.isInstanceOf[String]) => TypeTextArray(i.map(_.toString))
       case i: Product => TypeString(i.toString)
       case other => sys.error(s"Cannot convert instance of type[${other.getClass.getName}] to Parameter")
     }
@@ -141,6 +143,16 @@ object Parameter {
   }
   object TypeBytes {
     private val HexChars: Array[Char] = "0123456789abcdef".toCharArray
+  }
+  /** A text[] value, sent as its array literal under a `text[]` cast. Each element is quoted, so a comma, brace,
+    * quote or backslash inside one stays inside it, and an empty Seq is the empty array.
+    */
+  case class TypeTextArray(override val original: Seq[String]) extends Parameter[Seq[String]] {
+    override def value: String = original
+      .map { v => "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\"" }
+      .mkString("{", ",", "}")
+    override def interpolationValue: String = s"'${value.replace("'", "''")}'"
+    override def cast: Option[String] = Some("text[]")
   }
   case object TypeUnit extends Parameter[Unit] {
     override val original: Unit = ()
