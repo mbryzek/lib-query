@@ -314,6 +314,12 @@ class QuerySpec extends BaseSpec {
       q.sql() mustBe "select 1 from users where (id, name, name) in (values ({id}, {name}, {name_2}))"
       q.interpolate() mustBe "select 1 from users where (id, name, name) in (values ('a', 'mike', 'bryzek'))"
     }
+
+    "binds a Seq[String] element as text[]" in {
+      val q = Query("select 1 from t").in3(("repo", "main", "heads"), Seq(("r", "m", Seq("h1", "h2"))))
+      q.sql() mustBe "select 1 from t where (repo, main, heads) in (values ({repo}, {main}, {heads}::text[]))"
+      q.interpolate() mustBe """select 1 from t where (repo, main, heads) in (values ('r', 'm', '{"h1","h2"}'))"""
+    }
   }
 
   "optionalIn3" must {

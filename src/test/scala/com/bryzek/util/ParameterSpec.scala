@@ -44,6 +44,37 @@ class ParameterSpec extends BaseSpec {
     }
   }
 
+  "TypeTextArray" should {
+    "bind a List[String] as text[], not as the List's toString" in {
+      val param = Parameter.from(List("a", "b"): Any)
+      param mustBe a[TypeTextArray]
+      param.value mustBe """{"a","b"}"""
+      param.cast mustBe Some("text[]")
+    }
+
+    "bind a Vector[String] and an Option[Seq[String]]" in {
+      Parameter.from(Vector("a"): Any).value mustBe """{"a"}"""
+      Parameter.from(Some(Seq("a"))) mustBe a[TypeTextArray]
+    }
+
+    "quote each element, so a comma, brace, quote or backslash stays inside it" in {
+      TypeTextArray(Seq("a,b", "{c}", "d\"e", "f\\g")).value mustBe """{"a,b","{c}","d\"e","f\\g"}"""
+    }
+
+    "render the empty array" in {
+      TypeTextArray(Nil).value mustBe "{}"
+    }
+
+    "escape a single quote when interpolated" in {
+      TypeTextArray(Seq("o'brien")).interpolationValue mustBe """'{"o''brien"}'"""
+    }
+
+    "keep its cast whole in rendered sql and drop it when interpolated" in {
+      val q = Query("select 1 from t where heads = {heads}::text[]").bind("heads", Seq("h1"))
+      q.interpolate() mustBe """select 1 from t where heads = '{"h1"}'"""
+    }
+  }
+
   "bind with bytes" in {
     val bytes = Array[Byte](0x48, 0x65)
     val q = Query("insert into files (data) values ({data}::bytea)").bind("data", bytes)

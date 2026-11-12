@@ -591,7 +591,7 @@ case class Query(
 object Query {
 
   private val Placeholder = """\{([^{}]+)\}""".r
-  private val PlaceholderWithCast = s"${Placeholder.regex}(::\\w+)?".r
+  private val PlaceholderWithCast = s"${Placeholder.regex}(::\\w+(?:\\[\\])?)?".r
 
   /** Rewrites every `{name}` placeholder in one pass, so a new name that equals another old name is never renamed again.
     */
