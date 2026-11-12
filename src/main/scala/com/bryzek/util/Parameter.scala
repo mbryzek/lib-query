@@ -144,6 +144,7 @@ object Parameter {
   object TypeBytes {
     private val HexChars: Array[Char] = "0123456789abcdef".toCharArray
   }
+
   /** A text[] value, sent as its array literal under a `text[]` cast. Each element is quoted, so a comma, brace,
     * quote or backslash inside one stays inside it, and an empty Seq is the empty array.
     */
