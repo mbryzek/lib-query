@@ -8,7 +8,7 @@ version := "0.2.31"
 // each setting is what it is; a change is released there and the version bumped here.
 BryzekLibSettings.buildSettings("lib-query")
 
-ThisBuild / scalaVersion := "3.10.0"
+ThisBuild / scalaVersion := "3.10.1"
 
 // lib-build-testkit (the pin suites, % Test below) is published only to maven.bryzek.com; the
 // resolver in project/plugins.sbt reaches the meta-build alone.
@@ -67,6 +67,6 @@ lazy val root = project
       // The pin suites JacksonPinSpec and LogbackPinSpec extend. Every dependency of the testkit is
       // Provided, so each suite asserts the versions this build resolves. Same version as
       // lib-build-sbt in project/plugins.sbt.
-      "com.bryzek" %% "lib-build-testkit" % "0.0.1" % Test
+      "com.bryzek" %% "lib-build-testkit" % "0.0.7" % Test
     )
   )
