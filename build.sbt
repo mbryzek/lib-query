@@ -4,19 +4,19 @@ version := "0.2.32"
 
 // Publishing metadata, the guava pin, the browser-stack exclusions, the compiler gate and the
 // root project's test reporting are shared by every lib-* repository and DECLARED in lib-build's
-// BryzekLibSettings, which project/plugins.sbt brings in with lib-build-sbt. That file carries why
+// BryzekLibSettings, which project/plugins.sbt brings in with scala-build-sbt. That file carries why
 // each setting is what it is; a change is released there and the version bumped here.
 BryzekLibSettings.buildSettings("lib-query")
 
 ThisBuild / scalaVersion := "3.10.1"
 
-// lib-build-testkit (the pin suites, % Test below) is published only to maven.bryzek.com; the
+// scala-build-testkit (the pin suites, % Test below) is published only to maven.bryzek.com; the
 // resolver in project/plugins.sbt reaches the meta-build alone.
 ThisBuild / resolvers += "Bryzek Maven repository" at "https://maven.bryzek.com"
 
 // The Jackson 2, Jackson 3 and logback security pins are DECLARED in lib-build's BryzekPins (from
-// lib-build-sbt in project/plugins.sbt), and the pin specs under src/test/scala/com/bryzek/pins run
-// lib-build-testkit's suites against this build's resolution. That file carries why each floor is
+// scala-build-sbt in project/plugins.sbt), and the pin specs under src/test/scala/com/bryzek/pins run
+// scala-build-testkit's suites against this build's resolution. That file carries why each floor is
 // what it is; an advisory bump is released there and the version bumped here.
 //
 // Applied as `dependencyOverrides`, which governs THIS build's resolution only -- sbt writes none
@@ -66,7 +66,7 @@ lazy val root = project
         .exclude("org.lz4", "lz4-java"),
       // The pin suites JacksonPinSpec and LogbackPinSpec extend. Every dependency of the testkit is
       // Provided, so each suite asserts the versions this build resolves. Same version as
-      // lib-build-sbt in project/plugins.sbt.
-      "com.bryzek" %% "lib-build-testkit" % "0.0.7" % Test
+      // scala-build-sbt in project/plugins.sbt.
+      "com.bryzek" %% "scala-build-testkit" % "0.0.11" % Test
     )
   )
