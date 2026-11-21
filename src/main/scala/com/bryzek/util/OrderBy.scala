@@ -11,6 +11,11 @@ object OrderBy {
   private val SafeFunctions = Set("lower", "upper", "abs")
   private val FunctionPattern = """(\w+)\((.*)\)""".r
 
+  /** An `order by` built from constants: `OrderBy(i.CreatedAt.desc.nullsLast, i.Number.asc)`. */
+  def apply(first: SortTerm, rest: SortTerm*): OrderBy = {
+    OrderBy(Some((first +: rest).map(_.sql).mkString(", ")))
+  }
+
   def apply(value: String, validValues: Option[Set[String]] = None, nullsLast: Boolean = false): OrderBy = {
     parse(value, validValues, nullsLast).valueOr(e =>
       throw new IllegalArgumentException(e.toNonEmptyList.toList.mkString(", "))
