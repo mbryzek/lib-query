@@ -2,7 +2,7 @@ package com.bryzek.util
 
 import anorm.{ResultSetParser, Row, SQL, SimpleSql}
 
-import scala.annotation.tailrec
+import scala.annotation.{tailrec, targetName}
 import scala.util.{Failure, Success, Try}
 
 case class QueryFilter(sql: String, comment: Option[String] = None)
@@ -17,7 +17,8 @@ case class Query(
   groupBy: Option[String] = None,
   having: Option[String] = None,
   unions: Seq[(String, Query)] = Nil,
-  debugging: Boolean = false
+  debugging: Boolean = false,
+  joins: Seq[String] = Nil
 ) {
   def as[T](
     parser: ResultSetParser[T]
@@ -117,8 +118,7 @@ case class Query(
 
   private def mainSql(): String = {
     Query.joinClauses(
-      Seq(
-        Some(baseQuery),
+      (baseQuery +: joins) ++ Seq(
         generateSqlFilters(),
         groupBy.map { v => s"group by $v" },
         having.map { v => s"having $v" }
@@ -168,18 +168,29 @@ case class Query(
     Query.substitutePlaceholders(query, bound.map(bp => bp.name -> bp.param).toMap)
   }
 
+  private def operation(op: String, name: String, value: Any): Query = operation(op, name, name, value)
+
   @tailrec
-  private def operation(op: String, name: String, value: Any): Query = {
+  private def operation(op: String, column: String, bindName: String, value: Any): Query = {
     value match {
       case None => this
-      case Some(v) => operation(op, name, v)
+      case Some(v) => operation(op, column, bindName, v)
       case v => {
-        Sanitize.assertSafe(name)
-        val (q, p) = bindVar(name, v)
-        q.withFilter(QueryFilter(s"$name $op ${p.bindFragment}"))
+        Sanitize.assertSafe(column)
+        val (q, p) = bindVar(bindName, v)
+        q.withFilter(QueryFilter(s"$column $op ${p.bindFragment}"))
       }
     }
   }
+
+  /** The SQL a column renders, checked as every `String` column is. */
+  private def columnSql(column: SqlColumn): String = {
+    Sanitize.assertSafe(column.sql)
+    column.sql
+  }
+
+  private def columnOperation(op: String, column: SqlColumn, value: Any): Query =
+    operation(op, columnSql(column), column.name, value)
 
   def equals(name: String, value: Any): Query = operation("=", name, value)
   def notEquals(name: String, value: Any): Query = operation("!=", name, value)
@@ -187,6 +198,44 @@ case class Query(
   def greaterThanOrEquals(name: String, value: Any): Query = operation(">=", name, value)
   def lessThan(name: String, value: Any): Query = operation("<", name, value)
   def lessThanOrEquals(name: String, value: Any): Query = operation("<=", name, value)
+
+  // Each SqlColumn overload renders the column qualified (`i.status`) and binds under its bare name (`{status}`,
+  // `{status_2}` when taken), so no bind name is ever dotted.
+  def equals(column: SqlColumn, value: Any): Query = columnOperation("=", column, value)
+  def notEquals(column: SqlColumn, value: Any): Query = columnOperation("!=", column, value)
+  def greaterThan(column: SqlColumn, value: Any): Query = columnOperation(">", column, value)
+  def greaterThanOrEquals(column: SqlColumn, value: Any): Query = columnOperation(">=", column, value)
+  def lessThan(column: SqlColumn, value: Any): Query = columnOperation("<", column, value)
+  def lessThanOrEquals(column: SqlColumn, value: Any): Query = columnOperation("<=", column, value)
+
+  /** A column-against-column predicate, `o.issue_id = r.issue_id`: the correlation of a subquery, or a join's `on`. */
+  def sameAs(a: SqlColumn, b: SqlColumn): Query = {
+    withFilter(QueryFilter(s"${columnSql(a)} = ${columnSql(b)}"))
+  }
+
+  /** `exists (subquery)`, its bindings absorbed under names of their own as [[in]] over a subquery does. */
+  def exists(subQuery: Query): Query = existsFilter("exists", subQuery)
+
+  /** `not exists (subquery)`, its bindings absorbed under names of their own as [[in]] over a subquery does. */
+  def notExists(subQuery: Query): Query = existsFilter("not exists", subQuery)
+
+  private def existsFilter(op: String, subQuery: Query): Query = {
+    val (q, sql) = absorb(subQuery, Map.empty)
+    q.withFilter(QueryFilter(s"$op (${Query.embeddable(sql)})"))
+  }
+
+  /** `join <table> on a = b [and ...]`, rendered after the base query and before the `where`. */
+  def join(table: SqlTable, on: (SqlColumn, SqlColumn)*): Query = joinClause("join", table, on)
+
+  /** `left join <table> on a = b [and ...]`, rendered after the base query and before the `where`. */
+  def leftJoin(table: SqlTable, on: (SqlColumn, SqlColumn)*): Query = joinClause("left join", table, on)
+
+  private def joinClause(keyword: String, table: SqlTable, on: Seq[(SqlColumn, SqlColumn)]): Query = {
+    require(on.nonEmpty, s"$keyword ${table.sql} names no columns to join on")
+    val target = Query.tableSql(table)
+    val condition = on.map { case (a, b) => s"${columnSql(a)} = ${columnSql(b)}" }.mkString(" and ")
+    this.copy(joins = joins :+ s"$keyword $target on $condition")
+  }
 
   def matchNoRows(comment: Option[String] = None): Query = {
     withFilter(QueryFilter("false", comment))
@@ -230,12 +279,27 @@ case class Query(
     }
   }
 
+  def isNull(column: SqlColumn): Query = isNull(columnSql(column))
+  def isNotNull(column: SqlColumn): Query = isNotNull(columnSql(column))
+  def nullBoolean(column: SqlColumn, value: Option[Boolean]): Query = nullBoolean(columnSql(column), value)
+  def nullBoolean(column: SqlColumn, value: Boolean): Query = nullBoolean(columnSql(column), value)
+
+  def optionalIn(column: SqlColumn, values: Option[Seq[Any]]): Query = values.map(in(column, _)).getOrElse(this)
+  def in(column: SqlColumn, values: Seq[Any]): Query =
+    buildIn("in", "false", columnSql(column), column.name, values)
+  def optionalNotIn(column: SqlColumn, values: Option[Seq[Any]]): Query =
+    values.map(notIn(column, _)).getOrElse(this)
+  def notIn(column: SqlColumn, values: Seq[Any]): Query =
+    buildIn("not in", "true", columnSql(column), column.name, values)
+  def in(column: SqlColumn, subQuery: Query): Query = subQueryFilter("in", columnSql(column), subQuery)
+  def notIn(column: SqlColumn, subQuery: Query): Query = subQueryFilter("not in", columnSql(column), subQuery)
+
   def optionalIn(column: String, values: Option[Seq[Any]]): Query = {
     values.map(in(column, _)).getOrElse(this)
   }
 
   def in(column: String, values: Seq[Any]): Query = {
-    buildIn("in", "false", column, values)
+    buildIn("in", "false", column, column, values)
   }
 
   def optionalNotIn(column: String, values: Option[Seq[Any]]): Query = {
@@ -243,7 +307,7 @@ case class Query(
   }
 
   def notIn(column: String, values: Seq[Any]): Query = {
-    buildIn("not in", "true", column, values)
+    buildIn("not in", "true", column, column, values)
   }
 
   def notIn(name: String, subQuery: Query): Query = {
@@ -281,13 +345,13 @@ case class Query(
     )
   }
 
-  private def buildIn(op: String, default: String, column: String, values: Seq[Any]): Query = {
+  private def buildIn(op: String, default: String, column: String, bindName: String, values: Seq[Any]): Query = {
     Sanitize.assertSafe(column)
     if (values.isEmpty) {
       // matches nothing
       and(default)
     } else {
-      val (q, params) = bindAll(values.map(v => column -> v))
+      val (q, params) = bindAll(values.map(v => bindName -> v))
       q.withFilter(
         QueryFilter(
           s"$column $op (${params.map(_.bindFragment).mkString(", ")})"
@@ -377,6 +441,72 @@ case class Query(
     )
   }
 
+  @targetName("greaterThan2Columns")
+  def greaterThan2(columns: (SqlColumn, SqlColumn), values: (Any, Any)): Query = {
+    val (columnOne, columnTwo) = columns
+    val (q, params) = bindAll(
+      Seq(
+        columnOne.name -> assertNotNull(columnOne.sql, values._1),
+        columnTwo.name -> assertNotNull(columnTwo.sql, values._2)
+      )
+    )
+    q.withFilter(
+      QueryFilter(
+        s"(${columnSql(columnOne)}, ${columnSql(columnTwo)}) > (${params.map(_.bindFragment).mkString(", ")})"
+      )
+    )
+  }
+
+  @targetName("optionalIn2Columns")
+  def optionalIn2(columns: (SqlColumn, SqlColumn), values: Option[Seq[(Any, Any)]]): Query =
+    values.map(in2(columns, _)).getOrElse(this)
+
+  @targetName("in2Columns")
+  def in2(columns: (SqlColumn, SqlColumn), values: Seq[(Any, Any)]): Query =
+    columnInList(Seq(columns._1, columns._2), values.flatMap { v => Seq(v._1, v._2) })
+
+  @targetName("optionalIn3Columns")
+  def optionalIn3(columns: (SqlColumn, SqlColumn, SqlColumn), values: Option[Seq[(Any, Any, Any)]]): Query =
+    values.map(in3(columns, _)).getOrElse(this)
+
+  @targetName("in3Columns")
+  def in3(columns: (SqlColumn, SqlColumn, SqlColumn), values: Seq[(Any, Any, Any)]): Query =
+    columnInList(Seq(columns._1, columns._2, columns._3), values.flatMap { v => Seq(v._1, v._2, v._3) })
+
+  @targetName("optionalIn4Columns")
+  def optionalIn4(
+    columns: (SqlColumn, SqlColumn, SqlColumn, SqlColumn),
+    values: Option[Seq[(Any, Any, Any, Any)]]
+  ): Query =
+    values.map(in4(columns, _)).getOrElse(this)
+
+  @targetName("in4Columns")
+  def in4(columns: (SqlColumn, SqlColumn, SqlColumn, SqlColumn), values: Seq[(Any, Any, Any, Any)]): Query =
+    columnInList(
+      Seq(columns._1, columns._2, columns._3, columns._4),
+      values.flatMap { v => Seq(v._1, v._2, v._3, v._4) }
+    )
+
+  @targetName("optionalIn5Columns")
+  def optionalIn5(
+    columns: (SqlColumn, SqlColumn, SqlColumn, SqlColumn, SqlColumn),
+    values: Option[Seq[(Any, Any, Any, Any, Any)]]
+  ): Query =
+    values.map(in5(columns, _)).getOrElse(this)
+
+  @targetName("in5Columns")
+  def in5(
+    columns: (SqlColumn, SqlColumn, SqlColumn, SqlColumn, SqlColumn),
+    values: Seq[(Any, Any, Any, Any, Any)]
+  ): Query =
+    columnInList(
+      Seq(columns._1, columns._2, columns._3, columns._4, columns._5),
+      values.flatMap { v => Seq(v._1, v._2, v._3, v._4, v._5) }
+    )
+
+  private def columnInList(columns: Seq[SqlColumn], values: Seq[Any]): Query =
+    bindInList(columns.map(columnSql), columns.map(_.name), values)
+
   private def assertNotNull(column: String, value: Any): Any = {
     value match {
       case null | None =>
@@ -416,6 +546,9 @@ case class Query(
     this.copy(orderBy = Some(sort))
   }
 
+  /** The order an [[OrderBy]] holds, built from constants or parsed; one holding no term leaves the order as it is. */
+  def orderBy(sort: OrderBy): Query = orderBy(sort.sql)
+
   def groupBy(by: Option[String]): Query = {
     by.map(groupBy(_)).getOrElse(this)
   }
@@ -424,12 +557,39 @@ case class Query(
     this.copy(groupBy = Some(by))
   }
 
+  def groupBy(first: SqlColumn, rest: SqlColumn*): Query = {
+    groupBy((first +: rest).map(columnSql).mkString(", "))
+  }
+
   def having(clause: Option[String]): Query = {
     clause.map(having(_)).getOrElse(this)
   }
 
   def having(clause: String): Query = {
     this.copy(having = Some(clause))
+  }
+
+  // Each typed `having` compares an aggregate lib-query built, bound under the aggregate's name (`{count_id}`), and is
+  // and-ed onto any `having` already present.
+  def havingEquals(aggregate: SqlAggregate, value: Any): Query = havingOperation("=", aggregate, value)
+  def havingNotEquals(aggregate: SqlAggregate, value: Any): Query = havingOperation("!=", aggregate, value)
+  def havingGreaterThan(aggregate: SqlAggregate, value: Any): Query = havingOperation(">", aggregate, value)
+  def havingGreaterThanOrEquals(aggregate: SqlAggregate, value: Any): Query =
+    havingOperation(">=", aggregate, value)
+  def havingLessThan(aggregate: SqlAggregate, value: Any): Query = havingOperation("<", aggregate, value)
+  def havingLessThanOrEquals(aggregate: SqlAggregate, value: Any): Query = havingOperation("<=", aggregate, value)
+
+  @tailrec
+  private def havingOperation(op: String, aggregate: SqlAggregate, value: Any): Query = {
+    value match {
+      case None => this
+      case Some(v) => havingOperation(op, aggregate, v)
+      case v => {
+        val (q, p) = bindVar(aggregate.name, v)
+        val clause = s"${aggregate.sql} $op ${p.bindFragment}"
+        q.copy(having = Some(having.fold(clause)(existing => s"$existing and $clause")))
+      }
+    }
   }
 
   def union(other: Query): Query = {
@@ -563,12 +723,15 @@ case class Query(
     * The single-column [[buildIn]] above is NOT affected and is left alone -- Postgres turns that one into
     * `= any(array)`, which is already linear.
     */
-  private def bindInList(originalColumns: Seq[String], values: Seq[Any]): Query = {
+  private def bindInList(originalColumns: Seq[String], values: Seq[Any]): Query =
+    bindInList(originalColumns, originalColumns, values)
+
+  private def bindInList(originalColumns: Seq[String], bindNames: Seq[String], values: Seq[Any]): Query = {
     if (values.isEmpty) {
       matchNoRows(comment = Some(s"in clause specified for columns ${originalColumns.mkString(", ")} with no values"))
     } else {
       originalColumns.foreach(Sanitize.assertSafe)
-      val columns = duplicate(originalColumns, values.length)
+      val columns = duplicate(bindNames, values.length)
 
       val (q, params) = bindAll(values.zip(columns).map { case (v, n) => n -> v })
 
@@ -589,6 +752,22 @@ case class Query(
 }
 
 object Query {
+
+  /** A base query built from constants and aggregates: `select i.id, count(p.id) as count_id from issues.issues i`. */
+  def select(first: SqlExpr, rest: SqlExpr*)(from: SqlTable): Query = {
+    val exprs = first +: rest
+    exprs.foreach {
+      case _: SqlAggregate => () // built by Sql over a checked column
+      case e => Sanitize.assertSafe(e.sql)
+    }
+    Query(s"select ${exprs.map(_.selectSql).mkString(", ")} from ${tableSql(from)}")
+  }
+
+  /** The SQL a table renders, checked as a column is; the space before an alias is the one character it adds. */
+  private[util] def tableSql(table: SqlTable): String = {
+    Sanitize.assertSafe(table.sql.replace(' ', '_'))
+    table.sql
+  }
 
   private val Placeholder = """\{([^{}]+)\}""".r
   private val PlaceholderWithCast = s"${Placeholder.regex}(::\\w+(?:\\[\\])?)?".r
