@@ -3,7 +3,7 @@ name := "lib-query"
 version := "0.2.35"
 
 // Publishing metadata, the guava pin, the browser-stack exclusions, the compiler gate and the
-// root project's test reporting are shared by every lib-* repository and DECLARED in lib-build's
+// root project's test reporting are shared by every lib-* repository and DECLARED in scala-build's
 // BryzekLibSettings, which project/plugins.sbt brings in with scala-build-sbt. That file carries why
 // each setting is what it is; a change is released there and the version bumped here.
 BryzekLibSettings.buildSettings("lib-query")
@@ -14,7 +14,7 @@ ThisBuild / scalaVersion := "3.10.1"
 // resolver in project/plugins.sbt reaches the meta-build alone.
 ThisBuild / resolvers += "Bryzek Maven repository" at "https://maven.bryzek.com"
 
-// The Jackson 2, Jackson 3 and logback security pins are DECLARED in lib-build's BryzekPins (from
+// The Jackson 2, Jackson 3 and logback security pins are DECLARED in scala-build's BryzekPins (from
 // scala-build-sbt in project/plugins.sbt), and the pin specs under src/test/scala/com/bryzek/pins run
 // scala-build-testkit's suites against this build's resolution. That file carries why each floor is
 // what it is; an advisory bump is released there and the version bumped here.
