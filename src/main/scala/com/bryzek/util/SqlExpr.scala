@@ -27,7 +27,52 @@ trait SqlExpr {
   *
   * lib-query declares only what a query needs from a column; play-core's generated `Column` implements it.
   */
-trait SqlColumn extends SqlExpr
+trait SqlColumn extends SqlExpr {
+
+  /** This column under another qualifier, for a derived table or CTE that carries it (`k.body`):
+    * `${c.Body.at("k")}`, where the text would otherwise read `k.${c.Body.name}`.
+    */
+  def at(qualifier: String): SqlColumn = SqlColumn.Qualified(qualifier, name)
+
+  /** `i.status = 'fixed'`: a predicate over a stored literal, quoted and escaped here, for hand-written SQL that
+    * names a value rather than binding one (`${i.Status.is(IssueStatus.Fixed)}`).
+    */
+  def is(value: Any): String = s"${SqlColumn.checked(this)} = ${SqlLiteral.render(value)}"
+  def isNot(value: Any): String = s"${SqlColumn.checked(this)} != ${SqlLiteral.render(value)}"
+
+  /** `i.status in ('fixed', 'deployed')`; with no values it is `false`, which `in ()` cannot be. */
+  def in(values: Any*): String =
+    if (values.isEmpty) "false" else s"${SqlColumn.checked(this)} in (${values.map(SqlLiteral.render).mkString(", ")})"
+
+  /** `i.status not in ('fixed', 'deployed')`; with no values it is `true`. */
+  def notIn(values: Any*): String =
+    if (values.isEmpty) "true"
+    else s"${SqlColumn.checked(this)} not in (${values.map(SqlLiteral.render).mkString(", ")})"
+}
+
+object SqlColumn {
+  private[util] final case class Qualified(qualifier: String, name: String) extends SqlColumn {
+    Sanitize.assertSafe(qualifier)
+    Sanitize.assertSafe(name)
+    override def sql: String = s"$qualifier.$name"
+    override def toString: String = sql
+  }
+
+  private[util] def checked(column: SqlColumn): String = {
+    Sanitize.assertSafe(column.sql)
+    column.sql
+  }
+}
+
+/** A value written into SQL text rather than bound: a number or boolean as it is, anything else (a generated enum, a
+  * string) as its `toString`, single-quoted with every quote inside it doubled, so a missing quote cannot compile.
+  */
+object SqlLiteral {
+  def render(value: Any): String = value match {
+    case v: (Int | Long | Short | Byte | BigInt | BigDecimal | Boolean) => v.toString
+    case v => "'" + v.toString.replace("'", "''") + "'"
+  }
+}
 
 /** A table as a `from` or `join` target: `issues.issues i`, or `issues.issues` unaliased. */
 trait SqlTable {
@@ -58,6 +103,17 @@ object Sql {
   def sum(column: SqlColumn): SqlAggregate = over("sum", column)
   def max(column: SqlColumn): SqlAggregate = over("max", column)
   def min(column: SqlColumn): SqlAggregate = over("min", column)
+
+  /** The bare names of `columns`, for an insert's column list or a `returning`: `id, event_key, kind`. */
+  def names(columns: SqlExpr*): String = columns.map(bare).mkString(", ")
+
+  /** The bind placeholders of `columns`, under their bare names: `{id}, {event_key}, {kind}`. */
+  def binds(columns: SqlExpr*): String = columns.map(c => s"{${bare(c)}}").mkString(", ")
+
+  private def bare(column: SqlExpr): String = {
+    Sanitize.assertSafe(column.name)
+    column.name
+  }
 
   private def over(function: String, column: SqlColumn): SqlAggregate = {
     Sanitize.assertSafe(column.sql)
