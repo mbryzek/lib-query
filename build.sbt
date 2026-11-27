@@ -67,6 +67,6 @@ lazy val root = project
       // The pin suites JacksonPinSpec and LogbackPinSpec extend. Every dependency of the testkit is
       // Provided, so each suite asserts the versions this build resolves. Same version as
       // scala-build-sbt in project/plugins.sbt.
-      "com.bryzek" %% "scala-build-testkit" % "0.0.29" % Test
+      "com.bryzek" %% "scala-build-testkit" % "0.0.31" % Test
     )
   )
